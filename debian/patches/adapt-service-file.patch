@@ -1,0 +1,16 @@
+Description: Adapt service file with Kali files localization
+Author: Sophie Brun <sophie@offensive-security.com>
+Last-Update: 2019-03-04
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/bettercap.service
++++ b/bettercap.service
+@@ -7,7 +7,7 @@ After=network.target
+ [Service]
+ Type=simple
+ PermissionsStartOnly=true
+-ExecStart=/usr/local/bin/bettercap -no-colors -eval "set events.stream.output /var/log/bettercap.log; api.rest on"
++ExecStart=/usr/bin/bettercap -no-colors -eval "set events.stream.output /var/log/bettercap.log; api.rest on"
+ Restart=always
+ RestartSec=30
+ 

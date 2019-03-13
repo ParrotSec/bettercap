@@ -1,0 +1,173 @@
+bettercap (2.19-0kali2) kali-dev; urgency=medium
+
+  * Add iptables in Recommends
+
+ -- Sophie Brun <sophie@offensive-security.com>  Wed, 13 Mar 2019 08:59:43 +0100
+
+bettercap (2.19-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream version 2.19
+
+ -- Sophie Brun <sophie@offensive-security.com>  Tue, 12 Mar 2019 15:53:51 +0100
+
+bettercap (2.18-0kali1) kali-dev; urgency=medium
+
+  * New upstream version 2.18
+
+ -- Sophie Brun <sophie@offensive-security.com>  Mon, 04 Mar 2019 14:50:27 +0100
+
+bettercap (2.17-0kali1) kali-dev; urgency=medium
+
+  * New upstream version 2.17
+  * Update debian/copyright for new usptream release
+  * Handle new bettercap-caplets packages
+  * Install bettercap.service
+
+ -- Sophie Brun <sophie@offensive-security.com>  Thu, 21 Feb 2019 15:53:20 +0100
+
+bettercap (2.16-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@offensive-security.com>  Fri, 15 Feb 2019 09:38:40 +0100
+
+bettercap (2.15-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@offensive-security.com>  Thu, 14 Feb 2019 11:26:47 +0100
+
+bettercap (2.14-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@offensive-security.com>  Thu, 07 Feb 2019 11:31:24 +0100
+
+bettercap (2.13.1-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@offensive-security.com>  Wed, 30 Jan 2019 10:52:47 +0100
+
+bettercap (2.13-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@offensive-security.com>  Tue, 29 Jan 2019 11:21:58 +0100
+
+bettercap (2.12-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@offensive-security.com>  Mon, 21 Jan 2019 14:41:03 +0100
+
+bettercap (2.11.1-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+  * Refresh patches and remove fix-ip-route-parser.patch and fix-lan.go.patch
+    merged upstream
+
+ -- Sophie Brun <sophie@offensive-security.com>  Wed, 09 Jan 2019 15:01:02 +0100
+
+bettercap (2.11-0kali3) kali-dev; urgency=medium
+
+  * Add fix-ip-route-parser.patch to fix tests on armel, armhf
+
+ -- Sophie Brun <sophie@freexian.com>  Fri, 23 Nov 2018 10:48:26 +0100
+
+bettercap (2.11-0kali2) kali-dev; urgency=medium
+
+  * Import upstream patch to fix build on i386
+    of vendor/github.com/mdlayher/raw/
+  * Import an upstream patch to handle correctly not compatible
+    alias database
+
+ -- Sophie Brun <sophie@freexian.com>  Thu, 22 Nov 2018 15:53:32 +0100
+
+bettercap (2.11-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Wed, 21 Nov 2018 08:37:02 +0100
+
+bettercap (2.10-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Fri, 05 Oct 2018 09:54:59 +0200
+
+bettercap (2.9-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Wed, 12 Sep 2018 09:07:22 +0200
+
+bettercap (2.8-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Tue, 21 Aug 2018 11:44:34 +0200
+
+bettercap (2.7-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Tue, 24 Jul 2018 10:56:07 +0200
+
+bettercap (2.6-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Mon, 14 May 2018 09:55:45 +0200
+
+bettercap (2.5-0kali1) kali-experimental; urgency=medium
+
+  * Import new upstream release
+  * Update upstream git repository: now https://github.com/bettercap/bettercap
+  * Update debian/* to the latest version: bettercap is now written in Golang
+   (before it was in Ruby)
+
+ -- Sophie Brun <sophie@freexian.com>  Wed, 02 May 2018 09:27:26 +0200
+
+bettercap (1.6.2-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Tue, 22 Aug 2017 08:34:14 +0200
+
+bettercap (1.6.1-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+  * Add dependency: ruby-eventmachine
+
+ -- Sophie Brun <sophie@freexian.com>  Fri, 30 Jun 2017 12:00:42 +0200
+
+bettercap (1.6.0-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Thu, 05 Jan 2017 10:40:34 +0100
+
+bettercap (1.5.9-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Thu, 15 Dec 2016 11:27:45 +0100
+
+bettercap (1.5.8-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Mon, 29 Aug 2016 14:17:08 +0200
+
+bettercap (1.5.6-0kali1) kali-dev; urgency=medium
+
+  * Import new upstream release
+
+ -- Sophie Brun <sophie@freexian.com>  Wed, 20 Jul 2016 16:59:11 +0200
+
+bettercap (1.5.3-0kali1) kali-dev; urgency=medium
+
+  * Initial release (Closes: 0002460)
+
+ -- Sophie Brun <sophie@freexian.com>  Wed, 13 Apr 2016 15:30:21 +0200

@@ -1,0 +1,4 @@
+Clean the packaging: don't use the go packages embedded in vendor, use
+Kali packages.
+
+Update the bettercap-caplets package
