@@ -2,3 +2,4 @@ drop-failing-test-aliases.patch
 disable-install-update-caplets.patch
 adapt-service-file.patch
 fix-session.patch
+avoid-service-autostart.patch

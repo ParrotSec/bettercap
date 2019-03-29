@@ -1,3 +1,12 @@
+
+bettercap (2:2.21.1-1parrot2) testing; urgency=medium
+
+  * Increase version number.
+  * Rebuild with updated dependencies.
+  * Import parrot patches.
+
+ -- Federica Marasà <marafed@parrotsec.org>  Fri, 29 Mar 2019 16:14:47 +0100
+
 bettercap (2.21.1-1parrot1) testing; urgency=medium
 
   * Import new upstream version.
