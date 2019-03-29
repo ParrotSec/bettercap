@@ -26,6 +26,7 @@ import (
 type WiFiModule struct {
 	session.SessionModule
 
+	iface               *network.Endpoint
 	handle              *pcap.Handle
 	source              string
 	region              string
@@ -37,6 +38,7 @@ type WiFiModule struct {
 	frequencies         []int
 	ap                  *network.AccessPoint
 	stickChan           int
+	shakesFile          string
 	skipBroken          bool
 	pktSourceChan       chan gopacket.Packet
 	pktSourceChanClosed bool
@@ -46,7 +48,6 @@ type WiFiModule struct {
 	assocSkip           []net.HardwareAddr
 	assocSilent         bool
 	assocOpen           bool
-	shakesFile          string
 	apRunning           bool
 	showManuf           bool
 	apConfig            packets.Dot11ApConfig
@@ -59,6 +60,7 @@ type WiFiModule struct {
 func NewWiFiModule(s *session.Session) *WiFiModule {
 	mod := &WiFiModule{
 		SessionModule: session.NewSessionModule("wifi", s),
+		iface:         s.Interface,
 		minRSSI:       -200,
 		channel:       0,
 		stickChan:     0,
@@ -78,6 +80,13 @@ func NewWiFiModule(s *session.Session) *WiFiModule {
 		reads:         &sync.WaitGroup{},
 		chanLock:      &sync.Mutex{},
 	}
+
+	mod.InitState("channels")
+
+	mod.AddParam(session.NewStringParameter("wifi.interface",
+		"",
+		"",
+		"If filled, will use this interface name instead of the one provided by the -iface argument or detected automatically."))
 
 	mod.AddHandler(session.NewModuleHandler("wifi.recon on", "",
 		"Start 802.11 wireless base stations discovery and channel hopping.",
@@ -117,7 +126,8 @@ func NewWiFiModule(s *session.Session) *WiFiModule {
 		func(args []string) (err error) {
 			mod.ap = nil
 			mod.stickChan = 0
-			mod.frequencies, err = network.GetSupportedFrequencies(mod.Session.Interface.Name())
+			freqs, err := network.GetSupportedFrequencies(mod.iface.Name())
+			mod.setFrequencies(freqs)
 			mod.hopChanges <- true
 			return err
 		}))
@@ -251,7 +261,7 @@ func NewWiFiModule(s *session.Session) *WiFiModule {
 		"false",
 		"If true, wifi.show will also show the devices manufacturers."))
 
-	mod.AddHandler(session.NewModuleHandler("wifi.recon.channel", `wifi\.recon\.channel[\s]+([0-9]+(?:[, ]+[0-9]+)*|clear)`,
+	mod.AddHandler(session.NewModuleHandler("wifi.recon.channel CHANNEL", `wifi\.recon\.channel[\s]+([0-9]+(?:[, ]+[0-9]+)*|clear)`,
 		"WiFi channels (comma separated) or 'clear' for channel hopping.",
 		func(args []string) (err error) {
 			freqs := []int{}
@@ -273,13 +283,12 @@ func NewWiFiModule(s *session.Session) *WiFiModule {
 
 			if len(freqs) == 0 {
 				mod.Debug("resetting hopping channels")
-				if freqs, err = network.GetSupportedFrequencies(mod.Session.Interface.Name()); err != nil {
+				if freqs, err = network.GetSupportedFrequencies(mod.iface.Name()); err != nil {
 					return err
 				}
 			}
 
-			mod.Debug("new frequencies: %v", freqs)
-			mod.frequencies = freqs
+			mod.setFrequencies(freqs)
 
 			// if wifi.recon is not running, this would block forever
 			if mod.Running() {
@@ -323,7 +332,19 @@ const (
 	ErrIfaceNotUp = "Interface Not Up"
 )
 
+func (mod *WiFiModule) setFrequencies(freqs []int) {
+	mod.Debug("new frequencies: %v", freqs)
+
+	mod.frequencies = freqs
+	channels := []int{}
+	for _, freq := range freqs {
+		channels = append(channels, network.Dot11Freq2Chan(freq))
+	}
+	mod.State.Store("channels", channels)
+}
+
 func (mod *WiFiModule) Configure() error {
+	var ifName string
 	var hopPeriod int
 	var err error
 
@@ -345,7 +366,17 @@ func (mod *WiFiModule) Configure() error {
 		}
 	}
 
-	ifName := mod.Session.Interface.Name()
+	if err, ifName = mod.StringParam("wifi.interface"); err != nil {
+		return err
+	} else if ifName == "" {
+		mod.iface = mod.Session.Interface
+		ifName = mod.iface.Name()
+	} else if mod.iface, err = network.FindInterface(ifName); err != nil {
+		return fmt.Errorf("could not find interface %s: %v", ifName, err)
+	}
+
+	mod.Info("using interface %s (%s)", ifName, mod.iface.HwAddress)
+
 	if mod.source != "" {
 		if mod.handle, err = pcap.OpenOffline(mod.source); err != nil {
 			return fmt.Errorf("error while opening file %s: %s", mod.source, err)
@@ -355,7 +386,7 @@ func (mod *WiFiModule) Configure() error {
 			if err := network.SetWiFiRegion(mod.region); err != nil {
 				return err
 			} else {
-				mod.Info("WiFi region set to '%s'", mod.region)
+				mod.Debug("WiFi region set to '%s'", mod.region)
 			}
 		}
 
@@ -363,7 +394,7 @@ func (mod *WiFiModule) Configure() error {
 			if err := network.SetInterfaceTxPower(ifName, mod.txPower); err != nil {
 				mod.Warning("could not set interface %s txpower to %d, 'Set Tx Power' requests not supported", ifName, mod.txPower)
 			} else {
-				mod.Info("interface %s txpower set to %d", ifName, mod.txPower)
+				mod.Debug("interface %s txpower set to %d", ifName, mod.txPower)
 			}
 		}
 
@@ -388,7 +419,7 @@ func (mod *WiFiModule) Configure() error {
 				return fmt.Errorf("error while setting timeout: %s", err)
 			} else if mod.handle, err = ihandle.Activate(); err != nil {
 				if retry == 0 && err.Error() == ErrIfaceNotUp {
-					mod.Warning("interface %s is down, bringing it up ...", ifName)
+					mod.Debug("interface %s is down, bringing it up ...", ifName)
 					if err := network.ActivateInterface(ifName); err != nil {
 						return err
 					}
@@ -410,21 +441,21 @@ func (mod *WiFiModule) Configure() error {
 	mod.hopPeriod = time.Duration(hopPeriod) * time.Millisecond
 
 	if mod.source == "" {
-		// No channels setted, retrieve frequencies supported by the card
-		if len(mod.frequencies) == 0 {
-			if mod.frequencies, err = network.GetSupportedFrequencies(ifName); err != nil {
-				return fmt.Errorf("error while getting supported frequencies of %s: %s", ifName, err)
-			}
-
-			mod.Debug("wifi supported frequencies: %v", mod.frequencies)
-
-			// we need to start somewhere, this is just to check if
-			// this OS supports switching channel programmatically.
-			if err = network.SetInterfaceChannel(ifName, 1); err != nil {
-				return fmt.Errorf("error while initializing %s to channel 1: %s", ifName, err)
-			}
-			mod.Info("started (min rssi: %d dBm)", mod.minRSSI)
+		if freqs, err := network.GetSupportedFrequencies(ifName); err != nil {
+			return fmt.Errorf("error while getting supported frequencies of %s: %s", ifName, err)
+		} else {
+			mod.setFrequencies(freqs)
 		}
+
+		mod.Debug("wifi supported frequencies: %v", mod.frequencies)
+
+		// we need to start somewhere, this is just to check if
+		// this OS supports switching channel programmatically.
+		if err = network.SetInterfaceChannel(ifName, 1); err != nil {
+			return fmt.Errorf("error while initializing %s to channel 1: %s", ifName, err)
+		}
+
+		mod.Info("started (min rssi: %d dBm)", mod.minRSSI)
 	}
 
 	return nil
@@ -433,7 +464,7 @@ func (mod *WiFiModule) Configure() error {
 func (mod *WiFiModule) updateInfo(dot11 *layers.Dot11, packet gopacket.Packet) {
 	// avoid parsing info from frames we're sending
 	staMac := ops.Ternary(dot11.Flags.FromDS(), dot11.Address1, dot11.Address2).(net.HardwareAddr)
-	if !bytes.Equal(staMac, mod.Session.Interface.HW) {
+	if !bytes.Equal(staMac, mod.iface.HW) {
 		if ok, enc, cipher, auth := packets.Dot11ParseEncryption(packet, dot11); ok {
 			// Sometimes we get incomplete info about encryption, which
 			// makes stations with encryption enabled switch to OPEN.
@@ -462,13 +493,17 @@ func (mod *WiFiModule) updateStats(dot11 *layers.Dot11, packet gopacket.Packet) 
 		bytes := uint64(len(packet.Data()))
 
 		dst := dot11.Address1.String()
-		if station, found := mod.Session.WiFi.Get(dst); found {
-			station.Received += bytes
+		if ap, found := mod.Session.WiFi.Get(dst); found {
+			ap.Received += bytes
+		} else if sta, found := mod.Session.WiFi.GetClient(dst); found {
+			sta.Received += bytes
 		}
 
 		src := dot11.Address2.String()
-		if station, found := mod.Session.WiFi.Get(src); found {
-			station.Sent += bytes
+		if ap, found := mod.Session.WiFi.Get(src); found {
+			ap.Sent += bytes
+		} else if sta, found := mod.Session.WiFi.GetClient(src); found {
+			sta.Sent += bytes
 		}
 	}
 }
@@ -499,7 +534,9 @@ func (mod *WiFiModule) Start() error {
 				continue
 			}
 
-			mod.Session.Queue.TrackPacket(uint64(len(packet.Data())))
+			if mod.iface == mod.Session.Interface {
+				mod.Session.Queue.TrackPacket(uint64(len(packet.Data())))
+			}
 
 			// perform initial dot11 parsing and layers validation
 			if ok, radiotap, dot11 := packets.Dot11Parse(packet); ok {

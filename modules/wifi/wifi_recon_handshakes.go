@@ -33,10 +33,11 @@ func (mod *WiFiModule) discoverHandshakes(radiotap *layers.RadioTap, dot11 *laye
 		// (Reference about PMKID https://hashcat.net/forum/thread-7717.html)
 		// In this case, we need to add ourselves as a client station of the AP
 		// in order to have a consistent association of AP, client and handshakes.
-		staIsUs := bytes.Equal(staMac, mod.Session.Interface.HW)
+		staIsUs := bytes.Equal(staMac, mod.iface.HW)
 		station, found := ap.Get(staMac.String())
+		staAdded := false
 		if !found {
-			station, _ = ap.AddClientIfNew(staMac.String(), ap.Frequency, ap.RSSI)
+			station, staAdded = ap.AddClientIfNew(staMac.String(), ap.Frequency, ap.RSSI)
 		}
 
 		rawPMKID := []byte(nil)
@@ -88,18 +89,17 @@ func (mod *WiFiModule) discoverHandshakes(radiotap *layers.RadioTap, dot11 *laye
 			mod.Session.Events.Add("wifi.client.handshake", HandshakeEvent{
 				File:       mod.shakesFile,
 				NewPackets: numUnsaved,
-				AP:         apMac,
-				Station:    staMac,
+				AP:         apMac.String(),
+				Station:    staMac.String(),
 				PMKID:      rawPMKID,
 			})
 			// make sure the info that we have key material for this AP
 			// is persisted even after stations are pruned due to inactivity
 			ap.WithKeyMaterial(true)
 		}
-
 		// if we added ourselves as a client station but we didn't get any
 		// PMKID, just remove it from the list of clients of this AP.
-		if staIsUs && rawPMKID == nil {
+		if staAdded || (staIsUs && rawPMKID == nil) {
 			ap.RemoveClient(staMac.String())
 		}
 	}

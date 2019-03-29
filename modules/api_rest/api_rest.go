@@ -42,7 +42,7 @@ func NewRestAPI(s *session.Session) *RestAPI {
 	}
 
 	mod.AddParam(session.NewStringParameter("api.rest.address",
-		session.ParamIfaceAddress,
+		"127.0.0.1",
 		session.IPv4Validator,
 		"Address to bind the API REST server to."))
 
@@ -126,7 +126,7 @@ func (mod *RestAPI) Configure() error {
 	var port int
 
 	if mod.Running() {
-		return session.ErrAlreadyStarted
+		return session.ErrAlreadyStarted(mod.Name())
 	} else if err, ip = mod.StringParam("api.rest.address"); err != nil {
 		return err
 	} else if err, port = mod.IntParam("api.rest.port"); err != nil {
@@ -172,7 +172,12 @@ func (mod *RestAPI) Configure() error {
 
 	router := mux.NewRouter()
 
+	router.Methods("OPTIONS").HandlerFunc(mod.corsRoute)
+
+	router.HandleFunc("/api/file", mod.fileRoute)
+
 	router.HandleFunc("/api/events", mod.eventsRoute)
+
 	router.HandleFunc("/api/session", mod.sessionRoute)
 	router.HandleFunc("/api/session/ble", mod.sessionRoute)
 	router.HandleFunc("/api/session/ble/{mac}", mod.sessionRoute)

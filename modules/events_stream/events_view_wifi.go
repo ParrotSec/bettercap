@@ -60,7 +60,7 @@ func (mod *EventsStream) viewWiFiClientProbeEvent(e session.Event) {
 	fmt.Fprintf(mod.output, "[%s] [%s] station %s%s is probing for SSID %s%s\n",
 		e.Time.Format(mod.timeFormat),
 		tui.Green(e.Tag),
-		probe.FromAddr.String(),
+		probe.FromAddr,
 		tui.Dim(desc),
 		tui.Bold(probe.SSID),
 		tui.Yellow(rssi))
@@ -69,11 +69,11 @@ func (mod *EventsStream) viewWiFiClientProbeEvent(e session.Event) {
 func (mod *EventsStream) viewWiFiHandshakeEvent(e session.Event) {
 	hand := e.Data.(wifi.HandshakeEvent)
 
-	from := hand.Station.String()
-	to := hand.AP.String()
+	from := hand.Station
+	to := hand.AP
 	what := "handshake"
 
-	if ap, found := mod.Session.WiFi.Get(hand.AP.String()); found {
+	if ap, found := mod.Session.WiFi.Get(hand.AP); found {
 		to = fmt.Sprintf("%s (%s)", tui.Bold(ap.ESSID()), tui.Dim(ap.BSSID()))
 		what = fmt.Sprintf("%s handshake", ap.Encryption)
 	}

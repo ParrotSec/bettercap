@@ -1,3 +1,10 @@
+bettercap (2.21.1-1parrot1) testing; urgency=medium
+
+  * Import new upstream version.
+  * Bump debhelper-compat 12 version.
+
+ -- Lorenzo "Palinuro" Faletra <palinuro@parrotsec.org>  Fri, 29 Mar 2019 16:06:57 +0100
+
 bettercap (2:2.19-1parrot1) testing; urgency=medium
 
   * Import bettercap from kali.

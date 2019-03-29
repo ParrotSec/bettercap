@@ -1,9 +1,9 @@
 Source: bettercap
 Section: net
 Priority: optional
-Maintainer: Kali Developers <devel@kali.org>
-Uploaders: Sophie Brun <sophie@freexian.com>
-Build-Depends: debhelper (>= 11),
+Maintainer: Parrot Dev Team <team@parrotsec.org>
+Uploaders: Federica Marasà <marafed@parrotsec.org>
+Build-Depends: debhelper-compat (= 12),
 	       dh-golang,
 	       golang-go,
 	       libpcap-dev,
@@ -12,8 +12,8 @@ Build-Depends: debhelper (>= 11),
 	       procps,
 	       iproute2
 Standards-Version: 4.3.0
-Vcs-Git: git://git.kali.org/packages/bettercap.git
-Vcs-Browser: http://git.kali.org/gitweb/?p=packages/bettercap.git;a=summary
+Vcs-Git: https://nest.parrotsec.org/security-tools/bettercap
+Vcs-Browser: https://nest.parrotsec.org/security-tools/bettercap
 Homepage: https://www.bettercap.org
 XS-Go-Import-Path: github.com/bettercap/bettercap
 

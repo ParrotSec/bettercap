@@ -1,5 +1,3 @@
-// +build !windows
-
 package hid
 
 import (
@@ -32,6 +30,7 @@ type HIDRecon struct {
 	sniffType    string
 	pingPayload  []byte
 	inSniffMode  bool
+	sniffSilent  bool
 	inPromMode   bool
 	inInjectMode bool
 	keyLayout    string
@@ -58,10 +57,15 @@ func NewHIDRecon(s *session.Session) *HIDRecon {
 		inSniffMode:   false,
 		inPromMode:    false,
 		inInjectMode:  false,
+		sniffSilent:   true,
 		pingPayload:   []byte{0x0f, 0x0f, 0x0f, 0x0f},
 		keyLayout:     "US",
 		scriptPath:    "",
 	}
+
+	mod.State.Store("sniffing", &mod.sniffAddr)
+	mod.State.Store("injecting", &mod.inInjectMode)
+	mod.State.Store("layouts", SupportedLayouts())
 
 	mod.AddHandler(session.NewModuleHandler("hid.recon on", "",
 		"Start scanning for HID devices on the 2.4Ghz spectrum.",
@@ -75,10 +79,17 @@ func NewHIDRecon(s *session.Session) *HIDRecon {
 			return mod.Stop()
 		}))
 
+	mod.AddHandler(session.NewModuleHandler("hid.clear", "",
+		"Clear all devices collected by the HID discovery module.",
+		func(args []string) error {
+			mod.Session.HID.Clear()
+			return nil
+		}))
+
 	sniff := session.NewModuleHandler("hid.sniff ADDRESS", `(?i)^hid\.sniff ([a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2}|clear)$`,
 		"Start sniffing a specific ADDRESS in order to collect payloads, use 'clear' to stop collecting.",
 		func(args []string) error {
-			return mod.setSniffMode(args[0])
+			return mod.setSniffMode(args[0], false)
 		})
 
 	sniff.Complete("hid.sniff", s.HIDCompleter)
@@ -151,6 +162,10 @@ func (mod *HIDRecon) Configure() error {
 	var err error
 	var n int
 
+	if mod.Running() {
+		return session.ErrAlreadyStarted(mod.Name())
+	}
+
 	if err, mod.useLNA = mod.BoolParam("hid.lna"); err != nil {
 		return err
 	}
@@ -192,7 +207,9 @@ func (mod *HIDRecon) Configure() error {
 func (mod *HIDRecon) Stop() error {
 	return mod.SetRunning(false, func() {
 		mod.waitGroup.Wait()
-		mod.dongle.Close()
-		mod.Debug("device closed")
+		if mod.dongle != nil {
+			mod.dongle.Close()
+			mod.Debug("device closed")
+		}
 	})
 }

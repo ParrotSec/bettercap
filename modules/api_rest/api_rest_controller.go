@@ -3,7 +3,11 @@ package api_rest
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -22,7 +26,7 @@ type APIResponse struct {
 }
 
 func (mod *RestAPI) setAuthFailed(w http.ResponseWriter, r *http.Request) {
-	mod.Warning("Unauthorized authentication attempt from %s", r.RemoteAddr)
+	mod.Warning("Unauthorized authentication attempt from %s to %s", r.RemoteAddr, r.URL.String())
 
 	w.Header().Set("WWW-Authenticate", `Basic realm="auth"`)
 	w.WriteHeader(401)
@@ -41,7 +45,10 @@ func (mod *RestAPI) setSecurityHeaders(w http.ResponseWriter) {
 	w.Header().Add("X-Content-Type-Options", "nosniff")
 	w.Header().Add("X-XSS-Protection", "1; mode=block")
 	w.Header().Add("Referrer-Policy", "same-origin")
+
 	w.Header().Set("Access-Control-Allow-Origin", mod.allowOrigin)
+	w.Header().Add("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+	w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 }
 
 func (mod *RestAPI) checkAuth(r *http.Request) bool {
@@ -151,11 +158,16 @@ func (mod *RestAPI) runSessionCommand(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad Request", 400)
 	} else if err = json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		http.Error(w, "Bad Request", 400)
-	} else if err = session.I.Run(cmd.Command); err != nil {
-		http.Error(w, err.Error(), 400)
-	} else {
-		mod.toJSON(w, APIResponse{Success: true})
 	}
+
+	for _, aCommand := range session.ParseCommands(cmd.Command) {
+		if err = mod.Session.Run(aCommand); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+	}
+
+	mod.toJSON(w, APIResponse{Success: true})
 }
 
 func (mod *RestAPI) showEvents(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +176,13 @@ func (mod *RestAPI) showEvents(w http.ResponseWriter, r *http.Request) {
 	if mod.useWebsocket {
 		mod.startStreamingEvents(w, r)
 	} else {
-		events := session.I.Events.Sorted()
+		events := make([]session.Event, 0)
+		for _, e := range session.I.Events.Sorted() {
+			if mod.Session.EventsIgnoreList.Ignored(e) == false {
+				events = append(events, e)
+			}
+		}
+
 		nevents := len(events)
 		nmax := nevents
 		n := nmax
@@ -188,6 +206,11 @@ func (mod *RestAPI) showEvents(w http.ResponseWriter, r *http.Request) {
 
 func (mod *RestAPI) clearEvents(w http.ResponseWriter, r *http.Request) {
 	session.I.Events.Clear()
+}
+
+func (mod *RestAPI) corsRoute(w http.ResponseWriter, r *http.Request) {
+	mod.setSecurityHeaders(w)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (mod *RestAPI) sessionRoute(w http.ResponseWriter, r *http.Request) {
@@ -250,6 +273,44 @@ func (mod *RestAPI) sessionRoute(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (mod *RestAPI) readFile(fileName string, w http.ResponseWriter, r *http.Request) {
+	fp, err := os.Open(fileName)
+	if err != nil {
+		msg := fmt.Sprintf("could not open %s for reading: %s", fileName, err)
+		mod.Debug(msg)
+		http.Error(w, msg, 404)
+		return
+	}
+	defer fp.Close()
+
+	w.Header().Set("Content-type", "application/octet-stream")
+
+	io.Copy(w, fp)
+}
+
+func (mod *RestAPI) writeFile(fileName string, w http.ResponseWriter, r *http.Request) {
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		msg := fmt.Sprintf("invalid file upload: %s", err)
+		mod.Warning(msg)
+		http.Error(w, msg, 404)
+		return
+	}
+
+	err = ioutil.WriteFile(fileName, data, 0666)
+	if err != nil {
+		msg := fmt.Sprintf("can't write to %s: %s", fileName, err)
+		mod.Warning(msg)
+		http.Error(w, msg, 404)
+		return
+	}
+
+	mod.toJSON(w, APIResponse{
+		Success: true,
+		Message: fmt.Sprintf("%s created", fileName),
+	})
+}
+
 func (mod *RestAPI) eventsRoute(w http.ResponseWriter, r *http.Request) {
 	mod.setSecurityHeaders(w)
 
@@ -262,6 +323,25 @@ func (mod *RestAPI) eventsRoute(w http.ResponseWriter, r *http.Request) {
 		mod.showEvents(w, r)
 	} else if r.Method == "DELETE" {
 		mod.clearEvents(w, r)
+	} else {
+		http.Error(w, "Bad Request", 400)
+	}
+}
+
+func (mod *RestAPI) fileRoute(w http.ResponseWriter, r *http.Request) {
+	mod.setSecurityHeaders(w)
+
+	if !mod.checkAuth(r) {
+		mod.setAuthFailed(w, r)
+		return
+	}
+
+	fileName := r.URL.Query().Get("name")
+
+	if fileName != "" && r.Method == "GET" {
+		mod.readFile(fileName, w, r)
+	} else if fileName != "" && r.Method == "POST" {
+		mod.writeFile(fileName, w, r)
 	} else {
 		http.Error(w, "Bad Request", 400)
 	}
