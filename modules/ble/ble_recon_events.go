@@ -15,8 +15,12 @@ func (mod *BLERecon) onStateChanged(dev gatt.Device, s gatt.State) {
 		if mod.currDevice == nil {
 			mod.Info("starting discovery ...")
 			dev.Scan([]gatt.UUID{}, true)
+		} else {
+			mod.Debug("current device was not cleaned: %v", mod.currDevice)
 		}
 	case gatt.StatePoweredOff:
+		mod.Debug("resetting device instance")
+		mod.gattDevice.StopScanning()
 		mod.setCurrentDevice(nil)
 		mod.gattDevice = nil
 
@@ -30,6 +34,7 @@ func (mod *BLERecon) onPeriphDiscovered(p gatt.Peripheral, a *gatt.Advertisement
 }
 
 func (mod *BLERecon) onPeriphDisconnected(p gatt.Peripheral, err error) {
+	mod.Session.Events.Add("ble.device.disconnected", mod.currDevice)
 	mod.setCurrentDevice(nil)
 	if mod.Running() {
 		mod.Info("device disconnected, restoring discovery.")
@@ -51,6 +56,7 @@ func (mod *BLERecon) onPeriphConnected(p gatt.Peripheral, err error) {
 	defer func(per gatt.Peripheral) {
 		mod.Info("disconnecting from %s ...", per.ID())
 		per.Device().CancelConnection(per)
+		mod.setCurrentDevice(nil)
 	}(p)
 
 	mod.Session.Events.Add("ble.device.connected", mod.currDevice)
@@ -61,7 +67,8 @@ func (mod *BLERecon) onPeriphConnected(p gatt.Peripheral, err error) {
 
 	mod.Info("connected, enumerating all the things for %s!", p.ID())
 	services, err := p.DiscoverServices(nil)
-	if err != nil {
+	// https://github.com/bettercap/bettercap/issues/498
+	if err != nil && err.Error() != "success" {
 		mod.Error("error discovering services: %s", err)
 		return
 	}

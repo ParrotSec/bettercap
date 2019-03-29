@@ -87,7 +87,7 @@ func (mod *DNSSpoofer) Configure() error {
 	var address net.IP
 
 	if mod.Running() {
-		return session.ErrAlreadyStarted
+		return session.ErrAlreadyStarted(mod.Name())
 	} else if mod.Handle, err = pcap.OpenLive(mod.Session.Interface.Name(), 65536, true, pcap.BlockForever); err != nil {
 		return err
 	} else if err = mod.Handle.SetBPFFilter("udp"); err != nil {
@@ -109,7 +109,7 @@ func (mod *DNSSpoofer) Configure() error {
 
 	if hostsFile != "" {
 		mod.Info("loading hosts from file %s ...", hostsFile)
-		if err, hosts := HostsFromFile(hostsFile); err != nil {
+		if err, hosts := HostsFromFile(hostsFile, address); err != nil {
 			return fmt.Errorf("error reading hosts from file %s: %v", hostsFile, err)
 		} else {
 			mod.Hosts = append(mod.Hosts, hosts...)

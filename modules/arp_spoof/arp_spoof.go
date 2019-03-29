@@ -127,9 +127,14 @@ func (mod *ArpSpoofer) Start() error {
 		return err
 	}
 
+	nTargets := len(mod.addresses) + len(mod.macs)
+	if nTargets == 0 {
+		mod.Warning("list of targets is empty, module not starting.")
+		return nil
+	}
+
 	return mod.SetRunning(true, func() {
 		neighbours := []net.IP{}
-		nTargets := len(mod.addresses) + len(mod.macs)
 
 		if mod.internal {
 			list, _ := iprange.ParseList(mod.Session.Interface.CIDR())
@@ -214,23 +219,19 @@ func (mod *ArpSpoofer) getTargets(probe bool) map[string]net.HardwareAddr {
 	// add targets specified by IP address
 	for _, ip := range mod.addresses {
 		if mod.Session.Skip(ip) {
-			mod.Debug("skipping IP %s from arp spoofing.", ip)
 			continue
 		}
 		// do we have this ip mac address?
-		if hw, err := mod.Session.FindMAC(ip, probe); err != nil {
-			mod.Debug("could not find hardware address for %s", ip.String())
-		} else {
+		if hw, err := mod.Session.FindMAC(ip, probe); err == nil {
 			targets[ip.String()] = hw
 		}
 	}
 	// add targets specified by MAC address
 	for _, hw := range mod.macs {
-		if ip, err := network.ArpInverseLookup(mod.Session.Interface.Name(), hw.String(), false); err != nil {
-			mod.Warning("could not find IP address for %s", hw.String())
-		} else if mod.Session.Skip(net.ParseIP(ip)) {
-			mod.Debug("skipping address %s from arp spoofing.", ip)
-		} else {
+		if ip, err := network.ArpInverseLookup(mod.Session.Interface.Name(), hw.String(), false); err == nil {
+			if mod.Session.Skip(net.ParseIP(ip)) {
+				continue
+			}
 			targets[ip] = hw
 		}
 	}
@@ -295,6 +296,7 @@ func (mod *ArpSpoofer) arpSpoofTargets(saddr net.IP, smac net.HardwareAddr, chec
 			}
 
 			if gwPacket != nil {
+				mod.Debug("sending %d bytes of ARP packet to the gateway", len(gwPacket))
 				if err = mod.Session.Queue.Send(gwPacket); err != nil {
 					mod.Error("error while sending packet: %v", err)
 				}

@@ -1,9 +1,11 @@
 package packets
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"github.com/bettercap/bettercap/network"
 
@@ -20,17 +22,15 @@ type Activity struct {
 }
 
 type Traffic struct {
-	Sent     uint64
-	Received uint64
+	Sent     uint64 `json:"sent"`
+	Received uint64 `json:"received"`
 }
 
 type Stats struct {
-	sync.RWMutex
-
-	Sent        uint64
-	Received    uint64
-	PktReceived uint64
-	Errors      uint64
+	Sent        uint64 `json:"sent"`
+	Received    uint64 `json:"received"`
+	PktReceived uint64 `json:"pkts_received"`
+	Errors      uint64 `json:"errors"`
 }
 
 type PacketCallback func(pkt gopacket.Packet)
@@ -38,11 +38,11 @@ type PacketCallback func(pkt gopacket.Packet)
 type Queue struct {
 	sync.RWMutex
 
-	Activities chan Activity `json:"-"`
-
-	Stats   Stats
-	Protos  map[string]uint64
-	Traffic map[string]*Traffic
+	// keep on top because of https://github.com/bettercap/bettercap/issues/500
+	Stats      Stats
+	Protos     sync.Map
+	Traffic    sync.Map
+	Activities chan Activity
 
 	iface      *network.Endpoint
 	handle     *pcap.Handle
@@ -53,10 +53,17 @@ type Queue struct {
 	active     bool
 }
 
+type queueJSON struct {
+	Stats   Stats               `json:"stats"`
+	Protos  map[string]int      `json:"protos"`
+	Traffic map[string]*Traffic `json:"traffic"`
+}
+
 func NewQueue(iface *network.Endpoint) (q *Queue, err error) {
 	q = &Queue{
-		Protos:     make(map[string]uint64),
-		Traffic:    make(map[string]*Traffic),
+		Protos:     sync.Map{},
+		Traffic:    sync.Map{},
+		Stats:      Stats{},
 		Activities: make(chan Activity),
 
 		writes: &sync.WaitGroup{},
@@ -76,6 +83,28 @@ func NewQueue(iface *network.Endpoint) (q *Queue, err error) {
 	}
 
 	return
+}
+
+func (q *Queue) MarshalJSON() ([]byte, error) {
+	q.Lock()
+	defer q.Unlock()
+	doc := queueJSON{
+		Stats:   q.Stats,
+		Protos:  make(map[string]int),
+		Traffic: make(map[string]*Traffic),
+	}
+
+	q.Protos.Range(func(k, v interface{}) bool {
+		doc.Protos[k.(string)] = v.(int)
+		return true
+	})
+
+	q.Traffic.Range(func(k, v interface{}) bool {
+		doc.Traffic[k.(string)] = v.(*Traffic)
+		return true
+	})
+
+	return json.Marshal(doc)
 }
 
 func (q *Queue) OnPacket(cb PacketCallback) {
@@ -102,14 +131,12 @@ func (q *Queue) trackProtocols(pkt gopacket.Packet) {
 			continue
 		}
 
-		q.Lock()
 		name := proto.String()
-		if _, found := q.Protos[name]; !found {
-			q.Protos[name] = 1
+		if v, found := q.Protos.Load(name); !found {
+			q.Protos.Store(name, 1)
 		} else {
-			q.Protos[name]++
+			q.Protos.Store(name, v.(int)+1)
 		}
-		q.Unlock()
 	}
 }
 
@@ -122,46 +149,38 @@ func (q *Queue) trackActivity(eth *layers.Ethernet, ip4 *layers.IPv4, address ne
 		Source: isSent,
 	}
 
-	q.Lock()
-	defer q.Unlock()
-
 	// initialize or update stats
 	addr := address.String()
-	if _, found := q.Traffic[addr]; !found {
+	if v, found := q.Traffic.Load(addr); !found {
 		if isSent {
-			q.Traffic[addr] = &Traffic{Sent: pktSize}
+			q.Traffic.Store(addr, &Traffic{Sent: pktSize})
 		} else {
-			q.Traffic[addr] = &Traffic{Received: pktSize}
+			q.Traffic.Store(addr, &Traffic{Received: pktSize})
 		}
 	} else {
 		if isSent {
-			q.Traffic[addr].Sent += pktSize
+			v.(*Traffic).Sent += pktSize
 		} else {
-			q.Traffic[addr].Received += pktSize
+			v.(*Traffic).Received += pktSize
 		}
 	}
 }
 
 func (q *Queue) TrackPacket(size uint64) {
-	q.Stats.Lock()
-	defer q.Stats.Unlock()
-
-	q.Stats.PktReceived++
-	q.Stats.Received += size
+	// https://github.com/bettercap/bettercap/issues/500
+	if q == nil {
+		panic("track packet on nil queue!")
+	}
+	atomic.AddUint64(&q.Stats.PktReceived, 1)
+	atomic.AddUint64(&q.Stats.Received, size)
 }
 
 func (q *Queue) TrackSent(size uint64) {
-	q.Stats.Lock()
-	defer q.Stats.Unlock()
-
-	q.Stats.Sent += size
+	atomic.AddUint64(&q.Stats.Sent, size)
 }
 
 func (q *Queue) TrackError() {
-	q.Stats.Lock()
-	defer q.Stats.Unlock()
-
-	q.Stats.Errors++
+	atomic.AddUint64(&q.Stats.Errors, 1)
 }
 
 func (q *Queue) getPacketMeta(pkt gopacket.Packet) map[string]string {
