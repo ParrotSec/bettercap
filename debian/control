@@ -1,0 +1,28 @@
+Source: bettercap
+Section: net
+Priority: optional
+Maintainer: Parrot Dev Team <team@parrotsec.org>
+Uploaders: Federica Marasà <marafed@parrotsec.org>
+Build-Depends: debhelper-compat (= 12),
+	       dh-golang,
+	       golang-go,
+	       libpcap-dev,
+	       libnetfilter-queue-dev,
+	       libusb-1.0-0-dev,
+	       procps,
+	       iproute2
+Standards-Version: 4.3.0
+Vcs-Git: https://nest.parrotsec.org/security-tools/bettercap
+Vcs-Browser: https://nest.parrotsec.org/security-tools/bettercap
+Homepage: https://www.bettercap.org
+XS-Go-Import-Path: github.com/bettercap/bettercap
+
+Package: bettercap
+Architecture: any
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Recommends: bettercap-caplets, iptables
+Built-Using: ${misc:Built-Using}
+Description: Complete, modular, portable and easily extensible MITM framework
+ This package contains a Swiss Army knife for 802.11, BLE and Ethernet networks
+ reconnaissance and attacks.

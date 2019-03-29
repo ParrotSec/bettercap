@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE = 1
+export DH_GOPKG := github.com/bettercap/bettercap
+
+%:
+	dh $@ --buildsystem=golang --with=golang
+
+override_dh_auto_install:
+	dh_auto_install -- --no-source
+
+override_dh_dwz:

@@ -1,0 +1,115 @@
+Description: Use bettercap-caplets package
+ We packaged the bettercap-caplets so remove the install/update function
+ for caplets and use the correct path to caplets:/usr/share/bettercap.
+Author: Sophie Brun <sophie@offensive-security.com>
+Last-Update: 2019-02-21
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/caplets/env.go
++++ b/caplets/env.go
+@@ -11,7 +11,7 @@ const (
+ 	EnvVarName     = "CAPSPATH"
+ 	Suffix         = ".cap"
+ 	InstallArchive = "https://github.com/bettercap/caplets/archive/master.zip"
+-	InstallBase    = "/usr/local/share/bettercap/"
++	InstallBase    = "/usr/share/bettercap/"
+ )
+ 
+ var (
+--- a/modules/caplets/caplets.go
++++ b/modules/caplets/caplets.go
+@@ -2,8 +2,6 @@ package caplets
+ 
+ import (
+ 	"fmt"
+-	"io"
+-	"net/http"
+ 	"os"
+ 
+ 	"github.com/bettercap/bettercap/caplets"
+@@ -11,9 +9,7 @@ import (
+ 
+ 	"github.com/dustin/go-humanize"
+ 
+-	"github.com/evilsocket/islazy/fs"
+ 	"github.com/evilsocket/islazy/tui"
+-	"github.com/evilsocket/islazy/zip"
+ )
+ 
+ type CapletsModule struct {
+@@ -36,12 +32,11 @@ func NewCapletsModule(s *session.Session
+ 		func(args []string) error {
+ 			return mod.Paths()
+ 		}))
+-
+ 	mod.AddHandler(session.NewModuleHandler("caplets.update", "",
+-		"Install/updates the caplets.",
+-		func(args []string) error {
+-			return mod.Update()
+-		}))
++               "Install/updates the caplets.",
++               func(args []string) error {
++                       return mod.Update()
++               }))
+ 
+ 	return mod
+ }
+@@ -51,7 +46,7 @@ func (mod *CapletsModule) Name() string
+ }
+ 
+ func (mod *CapletsModule) Description() string {
+-	return "A module to list and update caplets."
++	return "A module to list caplets."
+ }
+ 
+ func (mod *CapletsModule) Author() string {
+@@ -73,7 +68,7 @@ func (mod *CapletsModule) Start() error
+ func (mod *CapletsModule) Show() error {
+ 	caplets := caplets.List()
+ 	if len(caplets) == 0 {
+-		return fmt.Errorf("no installed caplets on this system, use the caplets.update command to download them")
++		return fmt.Errorf("no installed caplets on this system, in Kali install bettercap-caplets package")
+ 	}
+ 
+ 	colNames := []string{
+@@ -113,38 +108,6 @@ func (mod *CapletsModule) Paths() error
+ }
+ 
+ func (mod *CapletsModule) Update() error {
+-	if !fs.Exists(caplets.InstallBase) {
+-		mod.Info("creating caplets install path %s ...", caplets.InstallBase)
+-		if err := os.MkdirAll(caplets.InstallBase, os.ModePerm); err != nil {
+-			return err
+-		}
+-	}
+-
+-	out, err := os.Create("/tmp/caplets.zip")
+-	if err != nil {
+-		return err
+-	}
+-	defer out.Close()
+-
+-	mod.Info("downloading caplets from %s ...", caplets.InstallArchive)
+-
+-	resp, err := http.Get(caplets.InstallArchive)
+-	if err != nil {
+-		return err
+-	}
+-	defer resp.Body.Close()
+-
+-	if _, err := io.Copy(out, resp.Body); err != nil {
+-		return err
+-	}
+-
+-	mod.Info("installing caplets to %s ...", caplets.InstallPath)
+-
+-	if _, err = zip.Unzip("/tmp/caplets.zip", caplets.InstallBase); err != nil {
+-		return err
+-	}
+-
+-	os.RemoveAll(caplets.InstallPath)
+-
+-	return os.Rename(caplets.InstallPathArchive, caplets.InstallPath)
++	mod.Info("this command is inactive in Kali. Install the Kali package bettercap-caplets to get the caplets")
++	return nil
+ }
