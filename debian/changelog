@@ -1,3 +1,9 @@
+bettercap (2:2.21.1-1parrot4) rolling-testing; urgency=medium
+
+  * Add new modified patches files from debian
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Mon, 18 Jan 2021 11:40:07 +0700
+
 bettercap (2:2.21.1-1parrot3) rolling-testing; urgency=medium
 
   * Update Deb standard to 4.5.0 and add uploader
