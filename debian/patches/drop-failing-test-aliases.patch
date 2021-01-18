@@ -1,9 +1,23 @@
-Description: Drop failing tests
- Upstream tests have not been updated even if code has been refactored.
-Author: Sophie Brun <sophie@offensive-security.com>
+From: Sophie Brun <sophie@offensive-security.com>
+Date: Mon, 18 Jan 2021 11:38:23 +0700
+Subject: Drop failing tests
+
+Last-Update: 2019-02-14
+
+Upstream tests have not been updated even if code has been refactored.
 Last-Update: 2019-02-14
 ---
-This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+ network/lan_test.go   | 200 --------------------------------------------------
+ network/net_test.go   |   4 +-
+ network/wifi_test.go  | 140 -----------------------------------
+ packets/dot11_test.go |   4 +-
+ 4 files changed, 4 insertions(+), 344 deletions(-)
+ delete mode 100644 network/lan_test.go
+ delete mode 100644 network/wifi_test.go
+
+diff --git a/network/lan_test.go b/network/lan_test.go
+deleted file mode 100644
+index 22a69fd..0000000
 --- a/network/lan_test.go
 +++ /dev/null
 @@ -1,200 +0,0 @@
@@ -207,19 +221,8 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 -		t.Fatalf("expected '%v', got '%v'", exp, got)
 -	}
 -}
---- a/packets/dot11_test.go
-+++ b/packets/dot11_test.go
-@@ -15,8 +15,8 @@ func TestDot11Vars(t *testing.T) {
- 	}{
- 		{openFlags, 1057},
- 		{wpaFlags, 1041},
--		{supportedRates, []byte{0x82, 0x84, 0x8b, 0x96, 0x24, 0x30, 0x48, 0x6c, 0x03, 0x01}},
--		{wpaRSN, []byte{
-+		{fakeApRates, []byte{0x82, 0x84, 0x8b, 0x96, 0x24, 0x30, 0x48, 0x6c, 0x03, 0x01}},
-+		{fakeApWpaRSN, []byte{
- 			0x01, 0x00, // RSN Version 1
- 			0x00, 0x0f, 0xac, 0x02, // Group Cipher Suite : 00-0f-ac TKIP
- 			0x02, 0x00, // 2 Pairwise Cipher Suites (next two lines)
+diff --git a/network/net_test.go b/network/net_test.go
+index 7aac451..f12c89c 100644
 --- a/network/net_test.go
 +++ b/network/net_test.go
 @@ -34,7 +34,7 @@ func TestNormalizeMac(t *testing.T) {
@@ -240,6 +243,9 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  
  func TestBuildEndpointFromInterface(t *testing.T) {
  	ifaces, err := net.Interfaces()
+diff --git a/network/wifi_test.go b/network/wifi_test.go
+deleted file mode 100644
+index 0ef7e48..0000000
 --- a/network/wifi_test.go
 +++ /dev/null
 @@ -1,140 +0,0 @@
@@ -383,3 +389,18 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 -		t.Error("unable to clear known access point for wifi struct")
 -	}
 -}
+diff --git a/packets/dot11_test.go b/packets/dot11_test.go
+index 00559c0..e06b6f0 100644
+--- a/packets/dot11_test.go
++++ b/packets/dot11_test.go
+@@ -15,8 +15,8 @@ func TestDot11Vars(t *testing.T) {
+ 	}{
+ 		{openFlags, 1057},
+ 		{wpaFlags, 1041},
+-		{supportedRates, []byte{0x82, 0x84, 0x8b, 0x96, 0x24, 0x30, 0x48, 0x6c, 0x03, 0x01}},
+-		{wpaRSN, []byte{
++		{fakeApRates, []byte{0x82, 0x84, 0x8b, 0x96, 0x24, 0x30, 0x48, 0x6c, 0x03, 0x01}},
++		{fakeApWpaRSN, []byte{
+ 			0x01, 0x00, // RSN Version 1
+ 			0x00, 0x0f, 0xac, 0x02, // Group Cipher Suite : 00-0f-ac TKIP
+ 			0x02, 0x00, // 2 Pairwise Cipher Suites (next two lines)

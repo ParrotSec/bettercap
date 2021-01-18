@@ -1,8 +1,16 @@
-Description: Adapt service file with Kali files localization
-Author: Sophie Brun <sophie@offensive-security.com>
+From: Sophie Brun <sophie@offensive-security.com>
+Date: Mon, 18 Jan 2021 11:38:24 +0700
+Subject: Adapt service file with Kali files localization
+
+Last-Update: 2019-03-04
+
 Last-Update: 2019-03-04
 ---
-This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+ bettercap.service | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/bettercap.service b/bettercap.service
+index 82bc642..23cc4fb 100644
 --- a/bettercap.service
 +++ b/bettercap.service
 @@ -7,7 +7,7 @@ After=network.target

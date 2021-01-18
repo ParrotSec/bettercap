@@ -1,11 +1,19 @@
-Description: Fix the session tests
-Author: Sophie Brun <sophie@offensive-security.com>
+From: Sophie Brun <sophie@offensive-security.com>
+Date: Mon, 18 Jan 2021 11:38:24 +0700
+Subject: Fix the session tests
+
+Last-Update: 2019-03-04
+
 Last-Update: 2019-03-04
 ---
-This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+ session/module_handler_test.go | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/session/module_handler_test.go b/session/module_handler_test.go
+index 9fc6b47..7f17545 100644
 --- a/session/module_handler_test.go
 +++ b/session/module_handler_test.go
-@@ -91,7 +91,7 @@ func TestModuleHandler_Help(t *testing.T
+@@ -91,7 +91,7 @@ func TestModuleHandler_Help(t *testing.T) {
  				Name:        tt.fields.Name,
  				Description: tt.fields.Description,
  				Parser:      tt.fields.Parser,
@@ -14,7 +22,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  			}
  			if got := h.Help(tt.args.padding); got != tt.want {
  				t.Errorf("ModuleHandler.Help() = \n%v, want\n%v", got, tt.want)
-@@ -152,7 +152,7 @@ func TestModuleHandler_Parse(t *testing.
+@@ -152,7 +152,7 @@ func TestModuleHandler_Parse(t *testing.T) {
  				Name:        tt.fields.Name,
  				Description: tt.fields.Description,
  				Parser:      tt.fields.Parser,
@@ -23,7 +31,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  			}
  			got, got1 := h.Parse(tt.args.line)
  			if got != tt.want {
-@@ -197,7 +197,7 @@ func TestModuleHandler_MarshalJSON(t *te
+@@ -197,7 +197,7 @@ func TestModuleHandler_MarshalJSON(t *testing.T) {
  				Name:        tt.fields.Name,
  				Description: tt.fields.Description,
  				Parser:      tt.fields.Parser,

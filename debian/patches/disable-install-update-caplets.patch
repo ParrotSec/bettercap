@@ -1,10 +1,19 @@
-Description: Use bettercap-caplets package
- We packaged the bettercap-caplets so remove the install/update function
- for caplets and use the correct path to caplets:/usr/share/bettercap.
-Author: Sophie Brun <sophie@offensive-security.com>
+From: Sophie Brun <sophie@offensive-security.com>
+Date: Mon, 18 Jan 2021 11:38:23 +0700
+Subject: Use bettercap-caplets package
+
+Last-Update: 2019-02-21
+
+We packaged the bettercap-caplets so remove the install/update function
+for caplets and use the correct path to caplets:/usr/share/bettercap.
 Last-Update: 2019-02-21
 ---
-This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+ caplets/env.go             |  2 +-
+ modules/caplets/caplets.go | 53 +++++++---------------------------------------
+ 2 files changed, 9 insertions(+), 46 deletions(-)
+
+diff --git a/caplets/env.go b/caplets/env.go
+index 4c803b6..094f295 100644
 --- a/caplets/env.go
 +++ b/caplets/env.go
 @@ -11,7 +11,7 @@ const (
@@ -16,6 +25,8 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  )
  
  var (
+diff --git a/modules/caplets/caplets.go b/modules/caplets/caplets.go
+index 61b5589..b1d745c 100644
 --- a/modules/caplets/caplets.go
 +++ b/modules/caplets/caplets.go
 @@ -2,8 +2,6 @@ package caplets
@@ -37,7 +48,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  )
  
  type CapletsModule struct {
-@@ -36,12 +32,11 @@ func NewCapletsModule(s *session.Session
+@@ -36,12 +32,11 @@ func NewCapletsModule(s *session.Session) *CapletsModule {
  		func(args []string) error {
  			return mod.Paths()
  		}))
@@ -54,7 +65,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  
  	return mod
  }
-@@ -51,7 +46,7 @@ func (mod *CapletsModule) Name() string
+@@ -51,7 +46,7 @@ func (mod *CapletsModule) Name() string {
  }
  
  func (mod *CapletsModule) Description() string {
@@ -63,7 +74,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  }
  
  func (mod *CapletsModule) Author() string {
-@@ -73,7 +68,7 @@ func (mod *CapletsModule) Start() error
+@@ -73,7 +68,7 @@ func (mod *CapletsModule) Start() error {
  func (mod *CapletsModule) Show() error {
  	caplets := caplets.List()
  	if len(caplets) == 0 {
@@ -72,7 +83,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  	}
  
  	colNames := []string{
-@@ -113,38 +108,6 @@ func (mod *CapletsModule) Paths() error
+@@ -113,38 +108,6 @@ func (mod *CapletsModule) Paths() error {
  }
  
  func (mod *CapletsModule) Update() error {

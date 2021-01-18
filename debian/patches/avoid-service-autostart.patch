@@ -1,13 +1,21 @@
-Description: Avoid service autostart
- bettercap (2:2.19-1parrot1) testing; urgency=medium
- .
-   * Import bettercap from kali.
-   * Don't make it start at boot.
-Author: Lorenzo "Palinuro" Faletra <palinuro@parrotsec.org>
+From: Lorenzo Palinuro Faletra <palinuro@parrotsec.org>
+Date: Mon, 18 Jan 2021 11:38:24 +0700
+Subject: Avoid service autostart
+
 Last-Update: 2019-03-29
 
---- bettercap-2.19.orig/bettercap.service
-+++ bettercap-2.19/bettercap.service
+bettercap (2:2.19-1parrot1) testing; urgency=medium
+
+  * Import bettercap from kali.
+  * Don't make it start at boot.
+---
+ bettercap.service | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/bettercap.service b/bettercap.service
+index 23cc4fb..877a29c 100644
+--- a/bettercap.service
++++ b/bettercap.service
 @@ -10,6 +10,3 @@ PermissionsStartOnly=true
  ExecStart=/usr/bin/bettercap -no-colors -eval "set events.stream.output /var/log/bettercap.log; api.rest on"
  Restart=always
