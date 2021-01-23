@@ -1,3 +1,9 @@
+bettercap (2:2.21.1-1parrot6) rolling-testing; urgency=medium
+
+  * Add patches to project
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Sat, 23 Jan 2021 13:22:29 +0700
+
 bettercap (2:2.21.1-1parrot5) rolling-testing; urgency=medium
 
   * Fix wrong location of launcher
