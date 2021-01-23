@@ -1,0 +1,21 @@
+From: Nong Hoang Tu <dmknght@parrotsec.org>
+Date: Sat, 23 Jan 2021 13:21:35 +0700
+Subject: Change deb standard to 4.5.1
+
+---
+ debian/control | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/debian/control b/debian/control
+index 5b36692..0ed778c 100644
+--- a/debian/control
++++ b/debian/control
+@@ -13,7 +13,7 @@ Build-Depends: debhelper-compat (= 12),
+ 	       libusb-1.0-0-dev,
+ 	       procps,
+ 	       iproute2
+-Standards-Version: 4.5.0
++Standards-Version: 4.5.1
+ Vcs-Git: https://nest.parrotsec.org/packages/tools/bettercap
+ Vcs-Browser: https://nest.parrotsec.org/packages/tools/bettercap
+ Homepage: https://www.bettercap.org

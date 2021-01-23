@@ -3,3 +3,4 @@ disable-install-update-caplets.patch
 adapt-service-file.patch
 fix-session.patch
 avoid-service-autostart.patch
+0006-Change-deb-standard-to-4.5.1.patch
