@@ -1,3 +1,10 @@
+bettercap (2:2.21.1-1parrot5) rolling-testing; urgency=medium
+
+  * Fix wrong location of launcher
+  * Remove x-parrot-package section
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Sat, 23 Jan 2021 13:21:11 +0700
+
 bettercap (2:2.21.1-1parrot4) rolling-testing; urgency=medium
 
   * Add new modified patches files from debian
