@@ -14,7 +14,7 @@ type HttpProxy struct {
 func NewHttpProxy(s *session.Session) *HttpProxy {
 	mod := &HttpProxy{
 		SessionModule: session.NewSessionModule("http.proxy", s),
-		proxy:         NewHTTPProxy(s),
+		proxy:         NewHTTPProxy(s, "http.proxy"),
 	}
 
 	mod.AddParam(session.NewIntParameter("http.port",
@@ -29,6 +29,10 @@ func NewHttpProxy(s *session.Session) *HttpProxy {
 	mod.AddParam(session.NewIntParameter("http.proxy.port",
 		"8080",
 		"Port to bind the HTTP proxy to."))
+
+	mod.AddParam(session.NewBoolParameter("http.proxy.redirect",
+		"true",
+		"Enable or disable port redirection with iptables."))
 
 	mod.AddParam(session.NewStringParameter("http.proxy.script",
 		"",
@@ -62,6 +66,8 @@ func NewHttpProxy(s *session.Session) *HttpProxy {
 			return mod.Stop()
 		}))
 
+		mod.InitState("stripper")
+
 	return mod
 }
 
@@ -82,6 +88,7 @@ func (mod *HttpProxy) Configure() error {
 	var address string
 	var proxyPort int
 	var httpPort int
+	var doRedirect bool
 	var scriptPath string
 	var stripSSL bool
 	var jsToInject string
@@ -95,6 +102,8 @@ func (mod *HttpProxy) Configure() error {
 	} else if err, proxyPort = mod.IntParam("http.proxy.port"); err != nil {
 		return err
 	} else if err, httpPort = mod.IntParam("http.port"); err != nil {
+		return err
+	} else if err, doRedirect = mod.BoolParam("http.proxy.redirect"); err != nil {
 		return err
 	} else if err, scriptPath = mod.StringParam("http.proxy.script"); err != nil {
 		return err
@@ -111,7 +120,12 @@ func (mod *HttpProxy) Configure() error {
 	mod.proxy.Blacklist = str.Comma(blacklist)
 	mod.proxy.Whitelist = str.Comma(whitelist)
 
-	return mod.proxy.Configure(address, proxyPort, httpPort, scriptPath, jsToInject, stripSSL)
+	error := mod.proxy.Configure(address, proxyPort, httpPort, doRedirect, scriptPath, jsToInject, stripSSL)
+
+	// save stripper to share it with other http(s) proxies
+	mod.State.Store("stripper", mod.proxy.Stripper)
+
+	return error
 }
 
 func (mod *HttpProxy) Start() error {
@@ -125,6 +139,7 @@ func (mod *HttpProxy) Start() error {
 }
 
 func (mod *HttpProxy) Stop() error {
+	mod.State.Store("stripper", nil)
 	return mod.SetRunning(false, func() {
 		mod.proxy.Stop()
 	})

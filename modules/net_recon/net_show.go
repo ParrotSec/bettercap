@@ -15,7 +15,7 @@ import (
 	"github.com/evilsocket/islazy/tui"
 )
 
-var (
+const (
 	AliveTimeInterval      = time.Duration(10) * time.Second
 	PresentTimeInterval    = time.Duration(1) * time.Minute
 	JustJoinedTimeInterval = time.Duration(10) * time.Second
@@ -98,11 +98,18 @@ func (mod *Discovery) getRow(e *network.Endpoint, withMeta bool) [][]string {
 
 	metas := []string{}
 	e.Meta.Each(func(name string, value interface{}) {
-		metas = append(metas, fmt.Sprintf("%s:%s", tui.Green(name), tui.Yellow(value.(string))))
+		s := ""
+		if sv, ok := value.(string); ok {
+			s = sv
+		} else {
+			s = fmt.Sprintf("%+v", value)
+		}
+
+		metas = append(metas, fmt.Sprintf("%s:%s", tui.Green(name), tui.Yellow(s)))
 	})
 	sort.Strings(metas)
 
-	rows := [][]string{}
+	rows := make([][]string, 0, len(metas))
 	for i, m := range metas {
 		if i == 0 {
 			rows = append(rows, append(row, m))

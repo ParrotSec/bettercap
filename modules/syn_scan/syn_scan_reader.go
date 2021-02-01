@@ -1,25 +1,28 @@
 package syn_scan
 
 import (
-	"net"
 	"sync/atomic"
 
 	"github.com/bettercap/bettercap/network"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+
+	"github.com/evilsocket/islazy/async"
 )
 
-func (mod *SynScanner) isAddressInRange(ip net.IP) bool {
-	for _, a := range mod.addresses {
-		if a.Equal(ip) {
-			return true
-		}
-	}
-	return false
+type OpenPort struct {
+	Proto   string `json:"proto"`
+	Banner  string `json:"banner"`
+	Service string `json:"service"`
+	Port    int    `json:"port"`
 }
 
 func (mod *SynScanner) onPacket(pkt gopacket.Packet) {
+	if pkt == nil || pkt.Data() == nil {
+		return
+	}
+
 	var eth layers.Ethernet
 	var ip layers.IPv4
 	var tcp layers.TCP
@@ -37,11 +40,17 @@ func (mod *SynScanner) onPacket(pkt gopacket.Packet) {
 		return
 	}
 
-	if mod.isAddressInRange(ip.SrcIP) && tcp.DstPort == synSourcePort && tcp.SYN && tcp.ACK {
+	if tcp.DstPort == synSourcePort && tcp.SYN && tcp.ACK {
 		atomic.AddUint64(&mod.stats.openPorts, 1)
 
 		from := ip.SrcIP.String()
 		port := int(tcp.SrcPort)
+
+		openPort := &OpenPort{
+			Proto:   "tcp",
+			Port:    port,
+			Service: network.GetServiceByPort(port, "tcp"),
+		}
 
 		var host *network.Endpoint
 		if ip.SrcIP.Equal(mod.Session.Interface.IP) {
@@ -53,9 +62,14 @@ func (mod *SynScanner) onPacket(pkt gopacket.Packet) {
 		}
 
 		if host != nil {
-			ports := host.Meta.GetIntsWith("tcp-ports", port, true)
-			host.Meta.SetInts("tcp-ports", ports)
+			ports := host.Meta.GetOr("ports", map[int]*OpenPort{}).(map[int]*OpenPort)
+			if _, found := ports[port]; !found {
+				ports[port] = openPort
+			}
+			host.Meta.Set("ports", ports)
 		}
+
+		mod.bannerQueue.Add(async.Job(grabberJob{from, openPort}))
 
 		NewSynScanEvent(from, host, port).Push()
 	}

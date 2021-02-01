@@ -38,6 +38,8 @@ func NewArpSpoofer(s *session.Session) *ArpSpoofer {
 		waitGroup:     &sync.WaitGroup{},
 	}
 
+	mod.SessionModule.Requires("net.recon")
+
 	mod.AddParam(session.NewStringParameter("arp.spoof.targets", session.ParamSubnet, "", "Comma separated list of IP addresses, MAC addresses or aliases to spoof, also supports nmap style IP ranges."))
 
 	mod.AddParam(session.NewStringParameter("arp.spoof.whitelist", "", "", "Comma separated list of IP addresses, MAC addresses or aliases to skip while spoofing."))
@@ -250,7 +252,7 @@ func (mod *ArpSpoofer) arpSpoofTargets(saddr net.IP, smac net.HardwareAddr, chec
 	isSpoofing := false
 
 	// are we spoofing the gateway IP?
-	if bytes.Equal(saddr, gwIP) {
+	if net.IP.Equal(saddr, gwIP) {
 		isGW = true
 		// are we restoring the original MAC of the gateway?
 		if !bytes.Equal(smac, gwHW) {

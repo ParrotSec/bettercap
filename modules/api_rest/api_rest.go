@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/bettercap/bettercap/session"
 	"github.com/bettercap/bettercap/tls"
+
+	"github.com/bettercap/recording"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -26,6 +29,17 @@ type RestAPI struct {
 	useWebsocket bool
 	upgrader     websocket.Upgrader
 	quit         chan bool
+
+	recClock       int
+	recording      bool
+	recTime        int
+	loading        bool
+	replaying      bool
+	recordFileName string
+	recordWait     *sync.WaitGroup
+	record         *recording.Archive
+	recStarted     time.Time
+	recStopped     time.Time
 }
 
 func NewRestAPI(s *session.Session) *RestAPI {
@@ -39,7 +53,27 @@ func NewRestAPI(s *session.Session) *RestAPI {
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
+		recClock:       1,
+		recording:      false,
+		recTime:        0,
+		loading:        false,
+		replaying:      false,
+		recordFileName: "",
+		recordWait:     &sync.WaitGroup{},
+		record:         nil,
 	}
+
+	mod.State.Store("recording", &mod.recording)
+	mod.State.Store("rec_clock", &mod.recClock)
+	mod.State.Store("replaying", &mod.replaying)
+	mod.State.Store("loading", &mod.loading)
+	mod.State.Store("load_progress", 0)
+	mod.State.Store("rec_time", &mod.recTime)
+	mod.State.Store("rec_filename", &mod.recordFileName)
+	mod.State.Store("rec_frames", 0)
+	mod.State.Store("rec_cur_frame", 0)
+	mod.State.Store("rec_started", &mod.recStarted)
+	mod.State.Store("rec_stopped", &mod.recStopped)
 
 	mod.AddParam(session.NewStringParameter("api.rest.address",
 		"127.0.0.1",
@@ -91,6 +125,34 @@ func NewRestAPI(s *session.Session) *RestAPI {
 		"Stop REST API server.",
 		func(args []string) error {
 			return mod.Stop()
+		}))
+
+	mod.AddParam(session.NewIntParameter("api.rest.record.clock",
+		"1",
+		"Number of seconds to wait while recording with api.rest.record between one sample and the next one."))
+
+	mod.AddHandler(session.NewModuleHandler("api.rest.record off", "",
+		"Stop recording the session.",
+		func(args []string) error {
+			return mod.stopRecording()
+		}))
+
+	mod.AddHandler(session.NewModuleHandler("api.rest.record FILENAME", `api\.rest\.record (.+)`,
+		"Start polling the rest API periodically recording each sample in a compressed file that can be later replayed.",
+		func(args []string) error {
+			return mod.startRecording(args[0])
+		}))
+
+	mod.AddHandler(session.NewModuleHandler("api.rest.replay off", "",
+		"Stop replaying the recorded session.",
+		func(args []string) error {
+			return mod.stopReplay()
+		}))
+
+	mod.AddHandler(session.NewModuleHandler("api.rest.replay FILENAME", `api\.rest\.replay (.+)`,
+		"Start the rest API module in replay mode using FILENAME as the recorded session file, will revert to normal mode once the replay is over.",
+		func(args []string) error {
+			return mod.startReplay(args[0])
 		}))
 
 	return mod
@@ -151,7 +213,7 @@ func (mod *RestAPI) Configure() error {
 
 	if mod.isTLS() {
 		if !fs.Exists(mod.certFile) || !fs.Exists(mod.keyFile) {
-			err, cfg := tls.CertConfigFromModule("api.rest", mod.SessionModule)
+			cfg, err := tls.CertConfigFromModule("api.rest", mod.SessionModule)
 			if err != nil {
 				return err
 			}
@@ -159,7 +221,7 @@ func (mod *RestAPI) Configure() error {
 			mod.Debug("%+v", cfg)
 			mod.Info("generating TLS key to %s", mod.keyFile)
 			mod.Info("generating TLS certificate to %s", mod.certFile)
-			if err := tls.Generate(cfg, mod.certFile, mod.keyFile); err != nil {
+			if err := tls.Generate(cfg, mod.certFile, mod.keyFile, false); err != nil {
 				return err
 			}
 		} else {
@@ -205,7 +267,9 @@ func (mod *RestAPI) Configure() error {
 }
 
 func (mod *RestAPI) Start() error {
-	if err := mod.Configure(); err != nil {
+	if mod.replaying {
+		return fmt.Errorf("the api is currently in replay mode, run api.rest.replay off before starting it")
+	} else if err := mod.Configure(); err != nil {
 		return err
 	}
 
@@ -229,6 +293,12 @@ func (mod *RestAPI) Start() error {
 }
 
 func (mod *RestAPI) Stop() error {
+	if mod.recording {
+		mod.stopRecording()
+	} else if mod.replaying {
+		mod.stopReplay()
+	}
+
 	return mod.SetRunning(false, func() {
 		go func() {
 			mod.quit <- true

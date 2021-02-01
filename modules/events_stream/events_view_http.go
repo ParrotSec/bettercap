@@ -6,11 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/bettercap/bettercap/modules/net_sniff"
 	"net/url"
 	"regexp"
 	"strings"
 
+	"github.com/bettercap/bettercap/modules/net_sniff"
 	"github.com/bettercap/bettercap/session"
 
 	"github.com/evilsocket/islazy/tui"
@@ -75,7 +75,7 @@ func (mod *EventsStream) dumpForm(body []byte) string {
 			if err != nil {
 				value = v
 			}
-			form = append(form, fmt.Sprintf("%s", tui.Bold(tui.Red(value))))
+			form = append(form, tui.Bold(tui.Red(value)))
 		}
 	}
 	return "\n" + strings.Join(form, "&") + "\n"
@@ -89,12 +89,21 @@ func (mod *EventsStream) dumpGZIP(body []byte) string {
 	buffer := bytes.NewBuffer(body)
 	uncompressed := bytes.Buffer{}
 	reader, err := gzip.NewReader(buffer)
-	if err != nil {
-		return mod.dumpRaw(body)
-	} else if _, err = uncompressed.ReadFrom(reader); err != nil {
-		return mod.dumpRaw(body)
+	if mod.dumpFormatHex {
+		if err != nil {
+			return mod.dumpRaw(body)
+		} else if _, err = uncompressed.ReadFrom(reader); err != nil {
+			return mod.dumpRaw(body)
+		}
+		return mod.dumpRaw(uncompressed.Bytes())
+	} else {
+		if err != nil {
+			return mod.dumpText(body)
+		} else if _, err = uncompressed.ReadFrom(reader); err != nil {
+			return mod.dumpText(body)
+		}
+		return mod.dumpText(uncompressed.Bytes())
 	}
-	return mod.dumpRaw(uncompressed.Bytes())
 }
 
 func (mod *EventsStream) dumpJSON(body []byte) string {
@@ -104,7 +113,7 @@ func (mod *EventsStream) dumpJSON(body []byte) string {
 	if err := json.Indent(&buf, body, "", "  "); err != nil {
 		pretty = string(body)
 	} else {
-		pretty = string(buf.Bytes())
+		pretty = buf.String()
 	}
 
 	return "\n" + reJsonKey.ReplaceAllString(pretty, tui.Green(`$1:`)) + "\n"
@@ -149,7 +158,11 @@ func (mod *EventsStream) viewHttpRequest(e session.Event) {
 			} else if req.IsType("application/json") {
 				dump += mod.dumpJSON(req.Body)
 			} else {
-				dump += mod.dumpRaw(req.Body)
+				if mod.dumpFormatHex {
+					dump += mod.dumpRaw(req.Body)
+				} else {
+					dump += mod.dumpText(req.Body)
+				}
 			}
 		}
 

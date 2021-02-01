@@ -30,6 +30,8 @@ func NewProber(s *session.Session) *Prober {
 		waitGroup:     &sync.WaitGroup{},
 	}
 
+	mod.SessionModule.Requires("net.recon")
+
 	mod.AddParam(session.NewBoolParameter("net.probe.nbns",
 		"true",
 		"Enable NetBIOS name service discovery probes."))
@@ -112,6 +114,10 @@ func (mod *Prober) Start() error {
 		list, err := iprange.Parse(mod.Session.Interface.CIDR())
 		if err != nil {
 			mod.Fatal("%s", err)
+		}
+
+		if mod.probes.MDNS {
+			go mod.mdnsProber()
 		}
 
 		fromIP := mod.Session.Interface.IP

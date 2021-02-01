@@ -1,5 +1,4 @@
 // +build !windows
-// +build !darwin
 
 package ble
 
@@ -332,7 +331,7 @@ func (mod *BLERecon) showServices(p gatt.Peripheral, services []*gatt.Service) {
 				if wantsToWrite && mod.writeUUID.Equal(ch.UUID()) {
 					foundToWrite = true
 					if isWritable {
-						mod.Info("writing %d bytes to characteristics %s ...", len(mod.writeData), mod.writeUUID)
+						mod.Debug("writing %d bytes to characteristics %s ...", len(mod.writeData), mod.writeUUID)
 					} else {
 						mod.Warning("attempt to write %d bytes to non writable characteristics %s ...", len(mod.writeData), mod.writeUUID)
 					}

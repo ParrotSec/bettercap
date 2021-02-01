@@ -25,10 +25,10 @@ func List() []*Caplet {
 
 		for _, fileName := range append(files, files2...) {
 			if _, err := os.Stat(fileName); err == nil {
-				base := strings.Replace(fileName, searchPath+"/", "", -1)
+				base := strings.Replace(fileName, searchPath+string(os.PathSeparator), "", -1)
 				base = strings.Replace(base, Suffix, "", -1)
 
-				if err, caplet := Load(base); err != nil {
+				if caplet, err := Load(base); err != nil {
 					fmt.Fprintf(os.Stderr, "wtf: %v\n", err)
 				} else {
 					caplets = append(caplets, caplet)
@@ -44,12 +44,12 @@ func List() []*Caplet {
 	return caplets
 }
 
-func Load(name string) (error, *Caplet) {
+func Load(name string) (*Caplet, error) {
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 
 	if caplet, found := cache[name]; found {
-		return nil, caplet
+		return caplet, nil
 	}
 
 	baseName := name
@@ -58,7 +58,7 @@ func Load(name string) (error, *Caplet) {
 		name += Suffix
 	}
 
-	if name[0] != '/' {
+	if !filepath.IsAbs(name) {
 		for _, path := range LoadPaths {
 			names = append(names, filepath.Join(path, name))
 		}
@@ -76,7 +76,7 @@ func Load(name string) (error, *Caplet) {
 			cache[name] = cap
 
 			if reader, err := fs.LineReader(fileName); err != nil {
-				return fmt.Errorf("error reading caplet %s: %v", fileName, err), nil
+				return nil, fmt.Errorf("error reading caplet %s: %v", fileName, err)
 			} else {
 				for line := range reader {
 					cap.Code = append(cap.Code, line)
@@ -103,9 +103,8 @@ func Load(name string) (error, *Caplet) {
 				}
 			}
 
-			return nil, cap
+			return cap, nil
 		}
 	}
-
-	return fmt.Errorf("caplet %s not found", name), nil
+	return nil, fmt.Errorf("caplet %s not found", name)
 }

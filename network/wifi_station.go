@@ -1,7 +1,14 @@
 package network
 
 import (
+	"fmt"
+	"regexp"
 	"strconv"
+	"strings"
+)
+
+var (
+	pathNameCleaner = regexp.MustCompile("[^a-zA-Z0-9]+")
 )
 
 type Station struct {
@@ -55,4 +62,15 @@ func (s *Station) HasWPS() bool {
 
 func (s *Station) IsOpen() bool {
 	return s.Encryption == "" || s.Encryption == "OPEN"
+}
+
+func (s *Station) PathFriendlyName() string {
+	name := ""
+	bssid := strings.Replace(s.HwAddress, ":", "", -1)
+	if essid := pathNameCleaner.ReplaceAllString(s.Hostname, ""); essid != "" {
+		name = fmt.Sprintf("%s_%s", essid, bssid)
+	} else {
+		name = bssid
+	}
+	return name
 }

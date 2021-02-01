@@ -51,6 +51,15 @@ func (mod *WiFiModule) doAssocOpen() bool {
 	return mod.assocOpen
 }
 
+func (mod *WiFiModule) doAssocAcquired() bool {
+	if err, is := mod.BoolParam("wifi.assoc.acquired"); err != nil {
+		mod.Warning("%v", err)
+	} else {
+		mod.assocAcquired = is
+	}
+	return mod.assocAcquired
+}
+
 func (mod *WiFiModule) startAssoc(to net.HardwareAddr) error {
 	// parse skip list
 	if err, assocSkip := mod.StringParam("wifi.assoc.skip"); err != nil {
@@ -88,9 +97,8 @@ func (mod *WiFiModule) startAssoc(to net.HardwareAddr) error {
 		}
 		return fmt.Errorf("%s is an unknown BSSID or it is in the association skip list.", to.String())
 	}
-
+	mod.writes.Add(1)
 	go func() {
-		mod.writes.Add(1)
 		defer mod.writes.Done()
 
 		// since we need to change the wifi adapter channel for each
@@ -110,6 +118,8 @@ func (mod *WiFiModule) startAssoc(to net.HardwareAddr) error {
 
 				if ap.IsOpen() && !mod.doAssocOpen() {
 					mod.Debug("skipping association for open network %s (wifi.assoc.open is false)", ap.ESSID())
+				} else if ap.HasKeyMaterial() && !mod.doAssocAcquired() {
+					mod.Debug("skipping association for AP %s (key material already acquired)", ap.ESSID())
 				} else {
 					logger("sending association request to AP %s (channel:%d encryption:%s)", ap.ESSID(), ap.Channel, ap.Encryption)
 

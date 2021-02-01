@@ -42,12 +42,12 @@ func NewHttpsServer(s *session.Session) *HttpsServer {
 		"Port to bind the http server to."))
 
 	mod.AddParam(session.NewStringParameter("https.server.certificate",
-		"~/.bettercap-https.cert.pem",
+		"~/.bettercap-httpd.cert.pem",
 		"",
 		"TLS certificate file (will be auto generated if filled but not existing)."))
 
 	mod.AddParam(session.NewStringParameter("https.server.key",
-		"~/.bettercap-https.key.pem",
+		"~/.bettercap-httpd.key.pem",
 		"",
 		"TLS key file (will be auto generated if filled but not existing)."))
 
@@ -129,7 +129,7 @@ func (mod *HttpsServer) Configure() error {
 	}
 
 	if !fs.Exists(certFile) || !fs.Exists(keyFile) {
-		err, cfg := tls.CertConfigFromModule("https.server", mod.SessionModule)
+		cfg, err := tls.CertConfigFromModule("https.server", mod.SessionModule)
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func (mod *HttpsServer) Configure() error {
 		mod.Debug("%+v", cfg)
 		mod.Info("generating server TLS key to %s", keyFile)
 		mod.Info("generating server TLS certificate to %s", certFile)
-		if err := tls.Generate(cfg, certFile, keyFile); err != nil {
+		if err := tls.Generate(cfg, certFile, keyFile, false); err != nil {
 			return err
 		}
 	} else {

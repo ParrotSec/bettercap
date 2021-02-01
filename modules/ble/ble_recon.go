@@ -1,5 +1,4 @@
 // +build !windows
-// +build !darwin
 
 package ble
 
@@ -20,12 +19,14 @@ import (
 
 type BLERecon struct {
 	session.SessionModule
+	deviceId    int
 	gattDevice  gatt.Device
 	currDevice  *network.BLEDevice
 	writeUUID   *gatt.UUID
 	writeData   []byte
 	connected   bool
-	connTimeout time.Duration
+	connTimeout int
+	devTTL      int
 	quit        chan bool
 	done        chan bool
 	selector    *utils.ViewSelector
@@ -34,10 +35,12 @@ type BLERecon struct {
 func NewBLERecon(s *session.Session) *BLERecon {
 	mod := &BLERecon{
 		SessionModule: session.NewSessionModule("ble.recon", s),
+		deviceId:      -1,
 		gattDevice:    nil,
 		quit:          make(chan bool),
 		done:          make(chan bool),
-		connTimeout:   time.Duration(10) * time.Second,
+		connTimeout:   5,
+		devTTL:        30,
 		currDevice:    nil,
 		connected:     false,
 	}
@@ -110,6 +113,18 @@ func NewBLERecon(s *session.Session) *BLERecon {
 
 	mod.AddHandler(write)
 
+	mod.AddParam(session.NewIntParameter("ble.device",
+		fmt.Sprintf("%d", mod.deviceId),
+		"Index of the HCI device to use, -1 to autodetect."))
+
+	mod.AddParam(session.NewIntParameter("ble.timeout",
+		fmt.Sprintf("%d", mod.connTimeout),
+		"Connection timeout in seconds."))
+
+	mod.AddParam(session.NewIntParameter("ble.ttl",
+		fmt.Sprintf("%d", mod.devTTL),
+		"Seconds of inactivity for a device to be pruned."))
+
 	return mod
 }
 
@@ -142,10 +157,15 @@ func (mod *BLERecon) Configure() (err error) {
 	if mod.Running() {
 		return session.ErrAlreadyStarted(mod.Name())
 	} else if mod.gattDevice == nil {
-		mod.Debug("initializing device ...")
+		if err, mod.deviceId = mod.IntParam("ble.device"); err != nil {
+			return err
+		}
+
+		mod.Debug("initializing device (id:%d) ...", mod.deviceId)
 
 		golog.SetFlags(0)
 		golog.SetOutput(dummyWriter{mod})
+
 		if mod.gattDevice, err = gatt.NewDevice(defaultBLEClientOptions...); err != nil {
 			mod.Debug("error while creating new gatt device: %v", err)
 			return err
@@ -158,6 +178,12 @@ func (mod *BLERecon) Configure() (err error) {
 		)
 
 		mod.gattDevice.Init(mod.onStateChanged)
+	}
+
+	if err, mod.connTimeout = mod.IntParam("ble.timeout"); err != nil {
+		return err
+	} else if err, mod.devTTL = mod.IntParam("ble.ttl"); err != nil {
+		return err
 	}
 
 	return nil
@@ -205,7 +231,8 @@ func (mod *BLERecon) Stop() error {
 }
 
 func (mod *BLERecon) pruner() {
-	mod.Debug("started devices pruner ...")
+	blePresentInterval := time.Duration(mod.devTTL) * time.Second
+	mod.Debug("started devices pruner with ttl %s", blePresentInterval)
 
 	for mod.Running() {
 		for _, dev := range mod.Session.BLE.Devices() {
@@ -246,8 +273,9 @@ func (mod *BLERecon) enumAllTheThings(mac string) error {
 	mod.Info("connecting to %s ...", mac)
 
 	go func() {
-		time.Sleep(mod.connTimeout)
+		time.Sleep(time.Duration(mod.connTimeout) * time.Second)
 		if mod.isEnumerating() && !mod.connected {
+			mod.Warning("connection timeout")
 			mod.Session.Events.Add("ble.connection.timeout", mod.currDevice)
 			mod.onPeriphDisconnected(nil, nil)
 		}

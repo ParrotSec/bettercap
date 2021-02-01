@@ -52,6 +52,7 @@ func ErrAlreadyStopped(name string) error {
 type UnknownCommandCallback func(cmd string) bool
 
 type GPS struct {
+	Updated       time.Time
 	Latitude      float64 // Latitude.
 	Longitude     float64 // Longitude.
 	FixQuality    string  // Quality of fix.
@@ -360,7 +361,7 @@ func (s *Session) ReadLine() (string, error) {
 }
 
 func (s *Session) RunCaplet(filename string) error {
-	err, caplet := caplets.Load(filename)
+	caplet, err := caplets.Load(filename)
 	if err != nil {
 		return err
 	}
@@ -381,7 +382,7 @@ func parseCapletCommand(line string) (is bool, caplet *caplets.Caplet, argv []st
 		argv = parts[1:]
 	}
 
-	if err, cap := caplets.Load(file); err == nil {
+	if cap, err := caplets.Load(file); err == nil {
 		return true, cap, argv
 	}
 
