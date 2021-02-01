@@ -1,2 +1,3 @@
-Test-Command: bettercap -h
-Restrictions: needs-root
+Test-Command: debian/tests/runtests.sh test_start_bettercap
+Restrictions: allow-stderr, needs-root
+Depends: @, expect, bettercap-caplets

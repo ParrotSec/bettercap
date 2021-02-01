@@ -1,28 +1,8 @@
-bettercap (2:2.21.1-1parrot6) rolling-testing; urgency=medium
+bettercap (2:2.29-1parrot1) testing; urgency=medium
 
-  * Add patches to project
+  * Import new Upstream package.
 
- -- Nong Hoang Tu <dmknght@parrotsec.org>  Sat, 23 Jan 2021 13:22:29 +0700
-
-bettercap (2:2.21.1-1parrot5) rolling-testing; urgency=medium
-
-  * Fix wrong location of launcher
-  * Remove x-parrot-package section
-
- -- Nong Hoang Tu <dmknght@parrotsec.org>  Sat, 23 Jan 2021 13:21:11 +0700
-
-bettercap (2:2.21.1-1parrot4) rolling-testing; urgency=medium
-
-  * Add new modified patches files from debian
-
- -- Nong Hoang Tu <dmknght@parrotsec.org>  Mon, 18 Jan 2021 11:40:23 +0700
-
-bettercap (2:2.21.1-1parrot3) rolling-testing; urgency=medium
-
-  * Update Deb standard to 4.5.0 and add uploader
-  * Add launcher
-
- -- Nong Hoang Tu <dmknght@parrotsec.org>  Mon, 18 Jan 2021 11:38:19 +0700
+ -- Lorenzo "Palinuro" Faletra <palinuro@parrotsec.org>  Mon, 01 Feb 2021 13:23:03 +0100
 
 bettercap (2:2.21.1-1parrot2) testing; urgency=medium
 

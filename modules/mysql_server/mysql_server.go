@@ -121,7 +121,7 @@ func (mod *MySQLServer) Start() error {
 				if _, err := conn.Write(packets.MySQLGreeting); err != nil {
 					mod.Warning("error while writing server greeting: %s", err)
 					continue
-				} else if read, err = reader.Read(readBuffer); err != nil {
+				} else if _, err = reader.Read(readBuffer); err != nil {
 					mod.Warning("error while reading client message: %s", err)
 					continue
 				}
@@ -153,7 +153,7 @@ func (mod *MySQLServer) Start() error {
 				if strings.HasPrefix(mod.infile, "\\") {
 					mod.Info("NTLM from '%s' relayed to %s", clientAddress, mod.infile)
 				} else if fileSize := read - 9; fileSize < 4 {
-					mod.Warning("unpexpected buffer size %d", read)
+					mod.Warning("unexpected buffer size %d", read)
 				} else {
 					mod.Info("read file ( %s ) is %d bytes", mod.infile, fileSize)
 

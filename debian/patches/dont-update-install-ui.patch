@@ -1,0 +1,50 @@
+From: Sophie Brun <sophie@offensive-security.com>
+Date: Mon, 21 Oct 2019 10:39:01 +0200
+Subject: don't install or update UI via bettercap interface
+
+Last-Update: 2019-07-09
+
+The UI's bettercap is packaged in bettercap-ui. Don't use the bettercap
+interface to update or install it.
+Last-Update: 2019-07-09
+---
+ modules/ui/ui.go | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/modules/ui/ui.go b/modules/ui/ui.go
+index f5d6950..6dd372b 100644
+--- a/modules/ui/ui.go
++++ b/modules/ui/ui.go
+@@ -35,8 +35,8 @@ func NewUIModule(s *session.Session) *UIModule {
+ 		client:        github.NewClient(nil),
+ 	}
+ 
+-	mod.AddParam(session.NewStringParameter("ui.basepath",
+-		"/usr/local/share/bettercap/",
++/*	mod.AddParam(session.NewStringParameter("ui.basepath",
++		"/usr/share/bettercap/",
+ 		"",
+ 		"UI base installation path."))
+ 
+@@ -52,10 +52,11 @@ func NewUIModule(s *session.Session) *UIModule {
+ 		}))
+ 
+ 	mod.AddHandler(session.NewModuleHandler("ui.update", "",
+-		"Download the latest available version of the UI and install it.",
++		"Disable in Kali. Install the package bettecap-ui",
+ 		func(args []string) error {
+ 			return mod.Start()
+ 		}))
++*/
+ 
+ 	return mod
+ }
+@@ -65,7 +66,7 @@ func (mod *UIModule) Name() string {
+ }
+ 
+ func (mod *UIModule) Description() string {
+-	return "A module to manage bettercap's UI updates and installed version."
++    return "A module to manage bettercap's UI. Disabled in Kali: use apt install bettercap-ui to install and/or update ui."
+ }
+ 
+ func (mod *UIModule) Author() string {

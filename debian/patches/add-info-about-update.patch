@@ -1,0 +1,25 @@
+From: Sophie Brun <sophie@offensive-security.com>
+Date: Thu, 23 Jul 2020 15:06:29 +0200
+Subject: Add an information about updates disabled
+
+Last-Update: 2020-07-23
+Description: display the information that updates are disabled in Kali
+when the user uses the command "bettercap -eval ..."
+---
+ main.go | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/main.go b/main.go
+index 7e0cbd2..ac44087 100644
+--- a/main.go
++++ b/main.go
+@@ -63,6 +63,9 @@ func main() {
+ 	// line, therefore they need to be executed first otherwise
+ 	// modules might already be started.
+ 	for _, cmd := range session.ParseCommands(*sess.Options.Commands) {
++	        if strings.Contains(cmd, "update") {
++		         fmt.Printf("%s is disabled in Kali. Please use apt\n", cmd)
++	        }
+ 		if err = sess.Run(cmd); err != nil {
+ 			log.Error("error while running '%s': %s", tui.Bold(cmd), tui.Red(err.Error()))
+ 		}

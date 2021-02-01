@@ -62,7 +62,7 @@ func NewDecimalParameter(name string, def_value string, desc string) *ModulePara
 	return NewModuleParameter(name, def_value, FLOAT, "^[\\d]+(\\.\\d+)?$", desc)
 }
 
-func (p ModuleParam) Validate(value string) (error, interface{}) {
+func (p ModuleParam) validate(value string) (error, interface{}) {
 	if p.Validator != nil {
 		if !p.Validator.MatchString(value) {
 			return fmt.Errorf("Parameter %s not valid: '%s' does not match rule '%s'.", tui.Bold(p.Name), value, p.Validator.String()), nil
@@ -94,6 +94,7 @@ func (p ModuleParam) Validate(value string) (error, interface{}) {
 
 const ParamIfaceName = "<interface name>"
 const ParamIfaceAddress = "<interface address>"
+const ParamIfaceAddress6 = "<interface address6>"
 const ParamSubnet = "<entire subnet>"
 const ParamRandomMAC = "<random mac>"
 
@@ -103,6 +104,8 @@ func (p ModuleParam) parse(s *Session, v string) string {
 		v = s.Interface.Name()
 	case ParamIfaceAddress:
 		v = s.Interface.IpAddress
+	case ParamIfaceAddress6:
+		v = s.Interface.Ip6Address
 	case ParamSubnet:
 		v = s.Interface.CIDR()
 	case ParamRandomMAC:
@@ -122,7 +125,7 @@ func (p ModuleParam) getUnlocked(s *Session) string {
 func (p ModuleParam) Get(s *Session) (error, interface{}) {
 	_, v := s.Env.Get(p.Name)
 	v = p.parse(s, v)
-	return p.Validate(v)
+	return p.validate(v)
 }
 
 func (p ModuleParam) Help(padding int) string {
@@ -133,6 +136,10 @@ func (p ModuleParam) Help(padding int) string {
 
 func (p ModuleParam) Register(s *Session) {
 	s.Env.Set(p.Name, p.Value)
+}
+
+func (p ModuleParam) RegisterObserver(s *Session, cb EnvironmentChangedCallback) {
+	s.Env.WithCallback(p.Name, p.Value, cb)
 }
 
 type JSONModuleParam struct {

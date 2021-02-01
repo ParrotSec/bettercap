@@ -22,7 +22,8 @@ type HostEntry struct {
 }
 
 func (e HostEntry) Matches(host string) bool {
-	return e.Host == host || strings.HasSuffix(host, e.Suffix) || (e.Expr != nil && e.Expr.Match(host))
+	lowerHost := strings.ToLower(host)
+	return e.Host == lowerHost || strings.HasSuffix(lowerHost, e.Suffix) || (e.Expr != nil && e.Expr.Match(lowerHost))
 }
 
 type Hosts []HostEntry
@@ -46,7 +47,7 @@ func NewHostEntry(host string, address net.IP) HostEntry {
 	return entry
 }
 
-func HostsFromFile(filename string,defaultAddress net.IP) (err error, entries []HostEntry) {
+func HostsFromFile(filename string, defaultAddress net.IP) (err error, entries []HostEntry) {
 	input, err := os.Open(filename)
 	if err != nil {
 		return

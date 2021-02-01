@@ -1,12 +1,22 @@
 #!/usr/bin/make -f
 
 #export DH_VERBOSE = 1
-export DH_GOPKG := github.com/bettercap/bettercap
+#export DH_GOPKG := github.com/bettercap/bettercap
+export GOCACHE=$(CURDIR)/vendor
+export GOPATH=$(CURDIR)/vendor
+
 
 %:
-	dh $@ --buildsystem=golang --with=golang
+	dh $@ --buildsystem=golang
+
+override_dh_auto_build:
+	go get -d
+	go install ./...
 
 override_dh_auto_install:
 	dh_auto_install -- --no-source
+
+override_dh_auto_test:
+	go test ./...
 
 override_dh_dwz:

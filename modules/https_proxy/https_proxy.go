@@ -17,7 +17,7 @@ type HttpsProxy struct {
 func NewHttpsProxy(s *session.Session) *HttpsProxy {
 	mod := &HttpsProxy{
 		SessionModule: session.NewSessionModule("https.proxy", s),
-		proxy:         http_proxy.NewHTTPProxy(s),
+		proxy:         http_proxy.NewHTTPProxy(s, "https.proxy"),
 	}
 
 	mod.AddParam(session.NewIntParameter("https.port",
@@ -32,6 +32,10 @@ func NewHttpsProxy(s *session.Session) *HttpsProxy {
 	mod.AddParam(session.NewIntParameter("https.proxy.port",
 		"8083",
 		"Port to bind the HTTPS proxy to."))
+
+	mod.AddParam(session.NewBoolParameter("https.proxy.redirect",
+		"true",
+		"Enable or disable port redirection with iptables."))
 
 	mod.AddParam(session.NewBoolParameter("https.proxy.sslstrip",
 		"false",
@@ -77,6 +81,8 @@ func NewHttpsProxy(s *session.Session) *HttpsProxy {
 			return mod.Stop()
 		}))
 
+	mod.InitState("stripper")
+
 	return mod
 }
 
@@ -97,6 +103,7 @@ func (mod *HttpsProxy) Configure() error {
 	var address string
 	var proxyPort int
 	var httpPort int
+	var doRedirect bool
 	var scriptPath string
 	var certFile string
 	var keyFile string
@@ -112,6 +119,8 @@ func (mod *HttpsProxy) Configure() error {
 	} else if err, proxyPort = mod.IntParam("https.proxy.port"); err != nil {
 		return err
 	} else if err, httpPort = mod.IntParam("https.port"); err != nil {
+		return err
+	} else if err, doRedirect = mod.BoolParam("https.proxy.redirect"); err != nil {
 		return err
 	} else if err, stripSSL = mod.BoolParam("https.proxy.sslstrip"); err != nil {
 		return err
@@ -137,7 +146,7 @@ func (mod *HttpsProxy) Configure() error {
 	mod.proxy.Whitelist = str.Comma(whitelist)
 
 	if !fs.Exists(certFile) || !fs.Exists(keyFile) {
-		err, cfg := tls.CertConfigFromModule("https.proxy", mod.SessionModule)
+		cfg, err := tls.CertConfigFromModule("https.proxy", mod.SessionModule)
 		if err != nil {
 			return err
 		}
@@ -145,7 +154,7 @@ func (mod *HttpsProxy) Configure() error {
 		mod.Debug("%+v", cfg)
 		mod.Info("generating proxy certification authority TLS key to %s", keyFile)
 		mod.Info("generating proxy certification authority TLS certificate to %s", certFile)
-		if err := tls.Generate(cfg, certFile, keyFile); err != nil {
+		if err := tls.Generate(cfg, certFile, keyFile, true); err != nil {
 			return err
 		}
 	} else {
@@ -153,7 +162,13 @@ func (mod *HttpsProxy) Configure() error {
 		mod.Info("loading proxy certification authority TLS certificate from %s", certFile)
 	}
 
-	return mod.proxy.ConfigureTLS(address, proxyPort, httpPort, scriptPath, certFile, keyFile, jsToInject, stripSSL)
+	error := mod.proxy.ConfigureTLS(address, proxyPort, httpPort, doRedirect, scriptPath, certFile, keyFile, jsToInject,
+		stripSSL)
+
+	// save stripper to share it with other http(s) proxies
+	mod.State.Store("stripper", mod.proxy.Stripper)
+
+	return error
 }
 
 func (mod *HttpsProxy) Start() error {
@@ -167,6 +182,7 @@ func (mod *HttpsProxy) Start() error {
 }
 
 func (mod *HttpsProxy) Stop() error {
+	mod.State.Store("stripper", nil)
 	return mod.SetRunning(false, func() {
 		mod.proxy.Stop()
 	})

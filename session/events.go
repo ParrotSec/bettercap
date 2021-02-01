@@ -38,7 +38,7 @@ func (e Event) Label() string {
 }
 
 type EventPool struct {
-	sync.Mutex
+	*sync.Mutex
 
 	debug     bool
 	silent    bool
@@ -48,6 +48,7 @@ type EventPool struct {
 
 func NewEventPool(debug bool, silent bool) *EventPool {
 	return &EventPool{
+		Mutex:     &sync.Mutex{},
 		debug:     debug,
 		silent:    silent,
 		events:    make([]Event, 0),
@@ -65,9 +66,7 @@ func (p *EventPool) Listen() <-chan Event {
 	go func() {
 		for i := len(p.events) - 1; i >= 0; i-- {
 			defer func() {
-				if recover() != nil {
-
-				}
+				recover()
 			}()
 			l <- p.events[i]
 		}
@@ -111,7 +110,16 @@ func (p *EventPool) Add(tag string, data interface{}) {
 
 	// broadcast the event to every listener
 	for _, l := range p.listeners {
-		l <- e
+		// do not block!
+		go func(ch chan Event) {
+			// channel might be closed
+			defer func() {
+				if recover() != nil {
+
+				}
+			}()
+			ch <- e
+		}(l)
 	}
 }
 

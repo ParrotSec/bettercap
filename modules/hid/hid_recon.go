@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/bettercap/nrf24"
+	"github.com/google/gousb"
 )
 
 func (mod *HIDRecon) doHopping() {
@@ -26,7 +27,13 @@ func (mod *HIDRecon) doHopping() {
 			mod.channel = 1
 		}
 		if err := mod.dongle.SetChannel(mod.channel); err != nil {
-			mod.Warning("error hopping on channel %d: %v", mod.channel, err)
+			if err == gousb.ErrorNoDevice || err == gousb.TransferStall {
+				mod.Error("device disconnected, stopping module")
+				mod.forceStop()
+				return
+			} else {
+				mod.Warning("error hopping on channel %d: %v", mod.channel, err)
+			}
 		} else {
 			mod.lastHop = time.Now()
 		}
@@ -61,13 +68,12 @@ func (mod *HIDRecon) onDeviceDetected(buf []byte) {
 	}
 }
 
-var maxDeviceTTL = 20 * time.Minute
-
 func (mod *HIDRecon) devPruner() {
 	mod.waitGroup.Add(1)
 	defer mod.waitGroup.Done()
 
-	mod.Debug("devices pruner started.")
+	maxDeviceTTL := time.Duration(mod.devTTL) * time.Second
+	mod.Debug("devices pruner started with ttl %v", maxDeviceTTL)
 	for mod.Running() {
 		for _, dev := range mod.Session.HID.Devices() {
 			sinceLastSeen := time.Since(dev.LastSeen)
@@ -107,6 +113,11 @@ func (mod *HIDRecon) Start() error {
 
 			buf, err := mod.dongle.ReceivePayload()
 			if err != nil {
+				if err == gousb.ErrorNoDevice || err == gousb.TransferStall {
+					mod.Error("device disconnected, stopping module")
+					mod.forceStop()
+					return
+				}
 				mod.Warning("error receiving payload from channel %d: %v", mod.channel, err)
 				continue
 			}

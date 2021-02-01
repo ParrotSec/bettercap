@@ -8,10 +8,12 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/bettercap/bettercap/session"
 )
 
 type JSRequest struct {
-	Client      string
+	Client      map[string]string
 	Method      string
 	Version     string
 	Scheme      string
@@ -27,7 +29,7 @@ type JSRequest struct {
 	bodyRead bool
 }
 
-var header_regexp = regexp.MustCompile(`(.*?): (.*)`)
+var header_regexp = regexp.MustCompile(`^\s*(.*?)\s*:\s*(.*)\s*$`)
 
 func NewJSRequest(req *http.Request) *JSRequest {
 	headers := ""
@@ -43,8 +45,16 @@ func NewJSRequest(req *http.Request) *JSRequest {
 		}
 	}
 
+	client_ip := strings.Split(req.RemoteAddr, ":")[0]
+	client_mac := ""
+	client_alias := ""
+	if endpoint := session.I.Lan.GetByIp(client_ip); endpoint != nil {
+		client_mac = endpoint.HwAddress
+		client_alias = endpoint.Alias
+	}
+
 	jreq := &JSRequest{
-		Client:      strings.Split(req.RemoteAddr, ":")[0],
+		Client:      map[string]string{"IP": client_ip, "MAC": client_mac, "Alias": client_alias},
 		Method:      req.Method,
 		Version:     fmt.Sprintf("%d.%d", req.ProtoMajor, req.ProtoMinor),
 		Scheme:      req.URL.Scheme,
@@ -63,7 +73,7 @@ func NewJSRequest(req *http.Request) *JSRequest {
 }
 
 func (j *JSRequest) NewHash() string {
-	hash := fmt.Sprintf("%s.%s.%s.%s.%s.%s.%s.%s.%s", j.Client, j.Method, j.Version, j.Scheme, j.Hostname, j.Path, j.Query, j.ContentType, j.Headers)
+	hash := fmt.Sprintf("%s.%s.%s.%s.%s.%s.%s.%s.%s", j.Client["IP"], j.Method, j.Version, j.Scheme, j.Hostname, j.Path, j.Query, j.ContentType, j.Headers)
 	hash += "." + j.Body
 	return hash
 }
@@ -84,27 +94,44 @@ func (j *JSRequest) WasModified() bool {
 func (j *JSRequest) GetHeader(name, deflt string) string {
 	headers := strings.Split(j.Headers, "\r\n")
 	for i := 0; i < len(headers); i++ {
-		header_name := header_regexp.ReplaceAllString(headers[i], "$1")
-		header_value := header_regexp.ReplaceAllString(headers[i], "$2")
+		if headers[i] != "" {
+			header_parts := header_regexp.FindAllSubmatch([]byte(headers[i]), 1)
+			if len(header_parts) != 0 && len(header_parts[0]) == 3 {
+				header_name := string(header_parts[0][1])
+				header_value := string(header_parts[0][2])
 
-		if strings.ToLower(name) == strings.ToLower(header_name) {
-			return header_value
+				if strings.ToLower(name) == strings.ToLower(header_name) {
+					return header_value
+				}
+			}
 		}
 	}
 	return deflt
 }
 
 func (j *JSRequest) SetHeader(name, value string) {
+	name = strings.TrimSpace(name)
+	value = strings.TrimSpace(value)
+
+	if strings.ToLower(name) == "content-type" {
+		j.ContentType = value;
+	}
+
 	headers := strings.Split(j.Headers, "\r\n")
 	for i := 0; i < len(headers); i++ {
-		header_name := header_regexp.ReplaceAllString(headers[i], "$1")
-		header_value := header_regexp.ReplaceAllString(headers[i], "$2")
+		if headers[i] != "" {
+			header_parts := header_regexp.FindAllSubmatch([]byte(headers[i]), 1)
+			if len(header_parts) != 0 && len(header_parts[0]) == 3 {
+				header_name := string(header_parts[0][1])
+				header_value := string(header_parts[0][2])
 
-		if strings.ToLower(name) == strings.ToLower(header_name) {
-			old_header := header_name + ": " + header_value + "\r\n"
-			new_header := header_name + ": " + value + "\r\n"
-			j.Headers = strings.Replace(j.Headers, old_header, new_header, 1)
-			return
+				if strings.ToLower(name) == strings.ToLower(header_name) {
+					old_header := header_name + ": " + header_value + "\r\n"
+					new_header := name + ": " + value + "\r\n"
+					j.Headers = strings.Replace(j.Headers, old_header, new_header, 1)
+					return
+				}
+			}
 		}
 	}
 	j.Headers += name + ": " + value + "\r\n"
@@ -113,13 +140,18 @@ func (j *JSRequest) SetHeader(name, value string) {
 func (j *JSRequest) RemoveHeader(name string) {
 	headers := strings.Split(j.Headers, "\r\n")
 	for i := 0; i < len(headers); i++ {
-		header_name := header_regexp.ReplaceAllString(headers[i], "$1")
-		header_value := header_regexp.ReplaceAllString(headers[i], "$2")
+		if headers[i] != "" {
+			header_parts := header_regexp.FindAllSubmatch([]byte(headers[i]), 1)
+			if len(header_parts) != 0 && len(header_parts[0]) == 3 {
+				header_name := string(header_parts[0][1])
+				header_value := string(header_parts[0][2])
 
-		if strings.ToLower(name) == strings.ToLower(header_name) {
-			removed_header := header_name + ": " + header_value + "\r\n"
-			j.Headers = strings.Replace(j.Headers, removed_header, "", 1)
-			return
+				if strings.ToLower(name) == strings.ToLower(header_name) {
+					removed_header := header_name + ": " + header_value + "\r\n"
+					j.Headers = strings.Replace(j.Headers, removed_header, "", 1)
+					return
+				}
+			}
 		}
 	}
 }
@@ -162,31 +194,33 @@ func (j *JSRequest) ParseForm() map[string]string {
 }
 
 func (j *JSRequest) ToRequest() (req *http.Request) {
-	url := fmt.Sprintf("%s://%s:%s%s?%s", j.Scheme, j.Hostname, j.req.URL.Port(), j.Path, j.Query)
+	url := fmt.Sprintf("%s://%s:%s%s?%s", j.Scheme, j.req.URL.Hostname(), j.req.URL.Port(), j.Path, j.Query)
 	if j.Body == "" {
 		req, _ = http.NewRequest(j.Method, url, j.req.Body)
 	} else {
 		req, _ = http.NewRequest(j.Method, url, strings.NewReader(j.Body))
 	}
 
-	hadType := false
-
 	headers := strings.Split(j.Headers, "\r\n")
 	for i := 0; i < len(headers); i++ {
 		if headers[i] != "" {
-			header_name := header_regexp.ReplaceAllString(headers[i], "$1")
-			header_value := header_regexp.ReplaceAllString(headers[i], "$2")
+			header_parts := header_regexp.FindAllSubmatch([]byte(headers[i]), 1)
+			if len(header_parts) != 0 && len(header_parts[0]) == 3 {
+				header_name := string(header_parts[0][1])
+				header_value := string(header_parts[0][2])
 
-			req.Header.Set(header_name, header_value)
-			if strings.ToLower(header_name) == "content-type" {
-				hadType = true
+				if strings.ToLower(header_name) == "content-type" {
+					if header_value != j.ContentType {
+						req.Header.Set(header_name, j.ContentType)
+						continue
+					}
+				}
+				req.Header.Set(header_name, header_value)
 			}
 		}
 	}
 
-	if !hadType && j.ContentType != "" {
-		req.Header.Set("Content-Type", j.ContentType)
-	}
+	req.RemoteAddr = j.Client["IP"]
 
 	return
 }

@@ -1,2 +1,2 @@
 bettercap.service lib/systemd/system
-debian/helperscripts/parrot-bettercap.desktop usr/share/applications/
+vendor/bin usr/

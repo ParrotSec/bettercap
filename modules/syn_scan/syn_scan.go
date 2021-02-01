@@ -3,7 +3,6 @@ package syn_scan
 import (
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,20 +10,21 @@ import (
 	"github.com/bettercap/bettercap/packets"
 	"github.com/bettercap/bettercap/session"
 
-	"github.com/malfunkt/iprange"
+	"github.com/evilsocket/islazy/async"
 
-	"github.com/evilsocket/islazy/str"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/pcap"
 )
 
 const synSourcePort = 666
 
 type synScannerStats struct {
-	started      time.Time
 	numPorts     uint64
 	numAddresses uint64
 	totProbes    uint64
 	doneProbes   uint64
 	openPorts    uint64
+	started      time.Time
 }
 
 type SynScanner struct {
@@ -32,9 +32,13 @@ type SynScanner struct {
 	addresses     []net.IP
 	startPort     int
 	endPort       int
+	handle        *pcap.Handle
+	packets       chan gopacket.Packet
 	progressEvery time.Duration
 	stats         synScannerStats
 	waitGroup     *sync.WaitGroup
+	scanQueue     *async.WorkQueue
+	bannerQueue   *async.WorkQueue
 }
 
 func NewSynScanner(s *session.Session) *SynScanner {
@@ -44,6 +48,9 @@ func NewSynScanner(s *session.Session) *SynScanner {
 		waitGroup:     &sync.WaitGroup{},
 		progressEvery: time.Duration(1) * time.Second,
 	}
+
+	mod.scanQueue = async.NewQueue(0, mod.scanWorker)
+	mod.bannerQueue = async.NewQueue(0, mod.bannerGrabber)
 
 	mod.State.Store("scanning", &mod.addresses)
 	mod.State.Store("progress", 0.0)
@@ -91,44 +98,6 @@ func NewSynScanner(s *session.Session) *SynScanner {
 	return mod
 }
 
-func (mod *SynScanner) parseTargets(arg string) error {
-	if list, err := iprange.Parse(arg); err != nil {
-		return fmt.Errorf("error while parsing IP range '%s': %s", arg, err)
-	} else {
-		mod.addresses = list.Expand()
-	}
-	return nil
-}
-
-func (mod *SynScanner) parsePorts(args []string) (err error) {
-	argc := len(args)
-	mod.stats.totProbes = 0
-	mod.stats.doneProbes = 0
-	mod.startPort = 1
-	mod.endPort = 65535
-
-	if argc > 1 && str.Trim(args[1]) != "" {
-		if mod.startPort, err = strconv.Atoi(str.Trim(args[1])); err != nil {
-			return fmt.Errorf("invalid start port %s: %s", args[1], err)
-		} else if mod.startPort > 65535 {
-			mod.startPort = 65535
-		}
-		mod.endPort = mod.startPort
-	}
-
-	if argc > 2 && str.Trim(args[2]) != "" {
-		if mod.endPort, err = strconv.Atoi(str.Trim(args[2])); err != nil {
-			return fmt.Errorf("invalid end port %s: %s", args[2], err)
-		}
-	}
-
-	if mod.endPort < mod.startPort {
-		return fmt.Errorf("end port %d is greater than start port %d", mod.endPort, mod.startPort)
-	}
-
-	return
-}
-
 func (mod *SynScanner) Name() string {
 	return "syn.scan"
 }
@@ -141,7 +110,18 @@ func (mod *SynScanner) Author() string {
 	return "Simone Margaritelli <evilsocket@gmail.com>"
 }
 
-func (mod *SynScanner) Configure() error {
+func (mod *SynScanner) Configure() (err error) {
+	if mod.Running() {
+		return session.ErrAlreadyStarted(mod.Name())
+	}
+	if mod.handle == nil {
+		if mod.handle, err = pcap.OpenLive(mod.Session.Interface.Name(), 65536, true, pcap.BlockForever); err != nil {
+			return err
+		} else if err = mod.handle.SetBPFFilter(fmt.Sprintf("tcp dst port %d", synSourcePort)); err != nil {
+			return err
+		}
+		mod.packets = gopacket.NewPacketSource(mod.handle, mod.handle.LinkType()).Packets()
+	}
 	return nil
 }
 
@@ -174,22 +154,58 @@ func (mod *SynScanner) showProgress() error {
 func (mod *SynScanner) Stop() error {
 	mod.Info("stopping ...")
 	return mod.SetRunning(false, func() {
+		mod.packets <- nil
 		mod.waitGroup.Wait()
-		mod.showProgress()
-		mod.addresses = []net.IP{}
-		mod.State.Store("progress", 0.0)
 	})
 }
 
-func (mod *SynScanner) synScan() error {
-	mod.SetRunning(true, func() {
-		defer mod.SetRunning(false, func() {
-			mod.addresses = []net.IP{}
-			mod.State.Store("progress", 0.0)
-		})
+type scanJob struct {
+	Address net.IP
+	Mac     net.HardwareAddr
+}
 
+func (mod *SynScanner) scanWorker(job async.Job) {
+	scan := job.(scanJob)
+
+	for dstPort := mod.startPort; dstPort < mod.endPort+1; dstPort++ {
+		if !mod.Running() {
+			break
+		}
+
+		atomic.AddUint64(&mod.stats.doneProbes, 1)
+
+		err, raw := packets.NewTCPSyn(mod.Session.Interface.IP, mod.Session.Interface.HW, scan.Address, scan.Mac, synSourcePort, dstPort)
+		if err != nil {
+			mod.Error("error creating SYN packet: %s", err)
+			continue
+		}
+
+		if err := mod.Session.Queue.Send(raw); err != nil {
+			mod.Error("error sending SYN packet: %s", err)
+		} else {
+			mod.Debug("sent %d bytes of SYN packet to %s for port %d", len(raw), scan.Address.String(), dstPort)
+		}
+
+		time.Sleep(time.Duration(15) * time.Millisecond)
+	}
+}
+
+func (mod *SynScanner) synScan() error {
+	if err := mod.Configure(); err != nil {
+		return err
+	}
+
+	mod.SetRunning(true, func() {
 		mod.waitGroup.Add(1)
 		defer mod.waitGroup.Done()
+
+		defer mod.SetRunning(false, func() {
+			mod.showProgress()
+			mod.addresses = []net.IP{}
+			mod.State.Store("progress", 0.0)
+			mod.State.Store("scanning", &mod.addresses)
+			mod.packets <- nil
+		})
 
 		mod.stats.openPorts = 0
 		mod.stats.numPorts = uint64(mod.endPort - mod.startPort + 1)
@@ -210,9 +226,18 @@ func (mod *SynScanner) synScan() error {
 
 		mod.State.Store("progress", 0.0)
 
-		// set the collector
-		mod.Session.Queue.OnPacket(mod.onPacket)
-		defer mod.Session.Queue.OnPacket(nil)
+		// start the collector
+		mod.waitGroup.Add(1)
+		go func() {
+			defer mod.waitGroup.Done()
+
+			for packet := range mod.packets {
+				if !mod.Running() {
+					break
+				}
+				mod.onPacket(packet)
+			}
+		}()
 
 		// start to show progress every second
 		go func() {
@@ -238,28 +263,13 @@ func (mod *SynScanner) synScan() error {
 				continue
 			}
 
-			for dstPort := mod.startPort; dstPort < mod.endPort+1; dstPort++ {
-				if !mod.Running() {
-					break
-				}
-
-				atomic.AddUint64(&mod.stats.doneProbes, 1)
-
-				err, raw := packets.NewTCPSyn(mod.Session.Interface.IP, mod.Session.Interface.HW, address, mac, synSourcePort, dstPort)
-				if err != nil {
-					mod.Error("error creating SYN packet: %s", err)
-					continue
-				}
-
-				if err := mod.Session.Queue.Send(raw); err != nil {
-					mod.Error("error sending SYN packet: %s", err)
-				} else {
-					mod.Debug("sent %d bytes of SYN packet to %s for port %d", len(raw), address.String(), dstPort)
-				}
-
-				time.Sleep(time.Duration(10) * time.Millisecond)
-			}
+			mod.scanQueue.Add(async.Job(scanJob{
+				Address: address,
+				Mac:     mac,
+			}))
 		}
+
+		mod.scanQueue.WaitDone()
 	})
 
 	return nil

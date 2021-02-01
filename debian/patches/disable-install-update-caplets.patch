@@ -1,34 +1,31 @@
-From: Sophie Brun <sophie@offensive-security.com>
-Date: Mon, 18 Jan 2021 11:38:23 +0700
-Subject: Use bettercap-caplets package
+Description: Disable install and update caplets
+Author: Lorenzo "Palinuro" Faletra <palinuro@parrotsec.org>
+Last-Update: 2021-02-01
 
-Last-Update: 2019-02-21
-
-We packaged the bettercap-caplets so remove the install/update function
-for caplets and use the correct path to caplets:/usr/share/bettercap.
-Last-Update: 2019-02-21
----
- caplets/env.go             |  2 +-
- modules/caplets/caplets.go | 53 +++++++---------------------------------------
- 2 files changed, 9 insertions(+), 46 deletions(-)
-
-diff --git a/caplets/env.go b/caplets/env.go
-index 4c803b6..094f295 100644
---- a/caplets/env.go
-+++ b/caplets/env.go
-@@ -11,7 +11,7 @@ const (
- 	EnvVarName     = "CAPSPATH"
- 	Suffix         = ".cap"
- 	InstallArchive = "https://github.com/bettercap/caplets/archive/master.zip"
--	InstallBase    = "/usr/local/share/bettercap/"
-+	InstallBase    = "/usr/share/bettercap/"
- )
+--- bettercap-2.29.orig/caplets/env.go
++++ bettercap-2.29/caplets/env.go
+@@ -19,7 +19,7 @@ func getInstallBase() string {
+ 	if runtime.GOOS == "windows" {
+ 		return filepath.Join(os.Getenv("ALLUSERSPROFILE"), "bettercap")
+ 	}
+-	return "/usr/local/share/bettercap/"
++	return "/usr/share/bettercap/"
+ }
  
- var (
-diff --git a/modules/caplets/caplets.go b/modules/caplets/caplets.go
-index 61b5589..b1d745c 100644
---- a/modules/caplets/caplets.go
-+++ b/modules/caplets/caplets.go
+ func getUserHomeDir() string {
+--- bettercap-2.29.orig/main.go
++++ bettercap-2.29/main.go
+@@ -64,7 +64,7 @@ func main() {
+ 	// modules might already be started.
+ 	for _, cmd := range session.ParseCommands(*sess.Options.Commands) {
+ 	        if strings.Contains(cmd, "update") {
+-		         fmt.Printf("%s is disabled in Kali. Please use apt\n", cmd)
++		         fmt.Printf("%s is disabled in Parrot. Please use apt\n", cmd)
+ 	        }
+ 		if err = sess.Run(cmd); err != nil {
+ 			log.Error("error while running '%s': %s", tui.Bold(cmd), tui.Red(err.Error()))
+--- bettercap-2.29.orig/modules/caplets/caplets.go
++++ bettercap-2.29/modules/caplets/caplets.go
 @@ -2,8 +2,6 @@ package caplets
  
  import (
@@ -48,7 +45,7 @@ index 61b5589..b1d745c 100644
  )
  
  type CapletsModule struct {
-@@ -36,12 +32,11 @@ func NewCapletsModule(s *session.Session) *CapletsModule {
+@@ -36,12 +32,11 @@ func NewCapletsModule(s *session.Session
  		func(args []string) error {
  			return mod.Paths()
  		}))
@@ -65,7 +62,7 @@ index 61b5589..b1d745c 100644
  
  	return mod
  }
-@@ -51,7 +46,7 @@ func (mod *CapletsModule) Name() string {
+@@ -51,7 +46,7 @@ func (mod *CapletsModule) Name() string
  }
  
  func (mod *CapletsModule) Description() string {
@@ -74,16 +71,16 @@ index 61b5589..b1d745c 100644
  }
  
  func (mod *CapletsModule) Author() string {
-@@ -73,7 +68,7 @@ func (mod *CapletsModule) Start() error {
+@@ -73,7 +68,7 @@ func (mod *CapletsModule) Start() error
  func (mod *CapletsModule) Show() error {
  	caplets := caplets.List()
  	if len(caplets) == 0 {
 -		return fmt.Errorf("no installed caplets on this system, use the caplets.update command to download them")
-+		return fmt.Errorf("no installed caplets on this system, in Kali install bettercap-caplets package")
++		return fmt.Errorf("no installed caplets on this system, if you are using Parrot Security, run sudo apt install ettercap-caplets")
  	}
  
  	colNames := []string{
-@@ -113,38 +108,6 @@ func (mod *CapletsModule) Paths() error {
+@@ -113,38 +108,6 @@ func (mod *CapletsModule) Paths() error
  }
  
  func (mod *CapletsModule) Update() error {
@@ -94,7 +91,7 @@ index 61b5589..b1d745c 100644
 -		}
 -	}
 -
--	out, err := os.Create("/tmp/caplets.zip")
+-	out, err := os.Create(caplets.ArchivePath)
 -	if err != nil {
 -		return err
 -	}
@@ -114,13 +111,33 @@ index 61b5589..b1d745c 100644
 -
 -	mod.Info("installing caplets to %s ...", caplets.InstallPath)
 -
--	if _, err = zip.Unzip("/tmp/caplets.zip", caplets.InstallBase); err != nil {
+-	if _, err = zip.Unzip(caplets.ArchivePath, caplets.InstallBase); err != nil {
 -		return err
 -	}
 -
 -	os.RemoveAll(caplets.InstallPath)
 -
 -	return os.Rename(caplets.InstallPathArchive, caplets.InstallPath)
-+	mod.Info("this command is inactive in Kali. Install the Kali package bettercap-caplets to get the caplets")
++	mod.Info("this command is inactive in Parrot Security. Run sudo apt install bettercap-caplets to get the caplets")
 +	return nil
  }
+--- bettercap-2.29.orig/modules/ui/ui.go
++++ bettercap-2.29/modules/ui/ui.go
+@@ -52,7 +52,7 @@ func NewUIModule(s *session.Session) *UI
+ 		}))
+ 
+ 	mod.AddHandler(session.NewModuleHandler("ui.update", "",
+-		"Disable in Kali. Install the package bettecap-ui",
++		"Disable in Parrot. Install the package bettecap-ui",
+ 		func(args []string) error {
+ 			return mod.Start()
+ 		}))
+@@ -66,7 +66,7 @@ func (mod *UIModule) Name() string {
+ }
+ 
+ func (mod *UIModule) Description() string {
+-    return "A module to manage bettercap's UI. Disabled in Kali: use apt install bettercap-ui to install and/or update ui."
++    return "A module to manage bettercap's UI. Disabled in Parrot: use apt install bettercap-ui to install and/or update ui."
+ }
+ 
+ func (mod *UIModule) Author() string {

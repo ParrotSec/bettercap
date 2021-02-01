@@ -2,10 +2,9 @@ Source: bettercap
 Section: net
 Priority: optional
 Maintainer: Parrot Dev Team <team@parrotsec.org>
-Uploaders:
-  Federica Marasà <marafed@parrotsec.org>
-  Nong Hoang Tu <dmknght@parrotsec.org>
+Uploaders: Lorenzo "Palinuro" Faletra <palinuro@parrotsec.org>
 Build-Depends: debhelper-compat (= 12),
+	       ca-certificates,
 	       dh-golang,
 	       golang-go,
 	       libpcap-dev,
@@ -23,7 +22,8 @@ Package: bettercap
 Architecture: any
 Depends: ${misc:Depends},
          ${shlibs:Depends}
-Recommends: bettercap-caplets, iptables
+Recommends: bettercap-caplets, iptables, iw, iproute2
+Suggests: bettercap-ui
 Built-Using: ${misc:Built-Using}
 Description: Complete, modular, portable and easily extensible MITM framework
  This package contains a Swiss Army knife for 802.11, BLE and Ethernet networks
