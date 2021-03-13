@@ -1,3 +1,9 @@
+bettercap (2.30-parrot0) rolling-testing; urgency=medium
+
+  * New upstream version 2.30
+
+ -- Nong Hoang Tu <dmknght@parrotsec.org>  Sun, 14 Mar 2021 00:19:42 +0700
+
 bettercap (2:2.29-1parrot1) testing; urgency=medium
 
   * Import new Upstream package.
