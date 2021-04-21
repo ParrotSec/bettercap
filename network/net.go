@@ -112,6 +112,8 @@ func ParseTargets(targets string, aliasMap *data.UnsortedKV) (ips []net.IP, macs
 	}
 	targets = strings.Trim(targets, ", ")
 
+	// fmt.Printf("targets=%s macs=%#v\n", targets, macs)
+
 	// check and resolve aliases
 	for _, targetAlias := range aliasParser.FindAllString(targets, -1) {
 		found := false
@@ -137,7 +139,7 @@ func ParseTargets(targets string, aliasMap *data.UnsortedKV) (ips []net.IP, macs
 	if targets != "" {
 		list, err := iprange.ParseList(targets)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error while parsing address list '%s': %s.", targets, err)
+			return nil, nil, fmt.Errorf("error while parsing address list '%s': %s", targets, err)
 		}
 
 		ips = list.Expand()
@@ -303,7 +305,6 @@ func SetInterfaceTxPower(name string, txpower int) error {
 }
 
 func GatewayProvidedByUser(iface *Endpoint, gateway string) (*Endpoint, error) {
-	Debug("GatewayProvidedByUser(%s) [cmd=%v opts=%v parser=%v]", gateway, IPv4RouteCmd, IPv4RouteCmdOpts, IPv4RouteParser)
 	if IPv4Validator.MatchString(gateway) {
 		Debug("valid gateway ip %s", gateway)
 		// we have the address, now we need its mac
