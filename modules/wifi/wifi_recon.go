@@ -2,6 +2,7 @@ package wifi
 
 import (
 	"bytes"
+	"net"
 	"time"
 
 	"github.com/bettercap/bettercap/network"
@@ -85,6 +86,30 @@ func (mod *WiFiModule) discoverAccessPoints(radiotap *layers.RadioTap, dot11 *la
 	}
 }
 
+func (mod *WiFiModule) startProbing(staMac net.HardwareAddr, ssid string) error {
+	// if not already running, temporarily enable the pcap handle
+	// for packet injection
+	if !mod.Running() {
+		if err := mod.Configure(); err != nil {
+			return err
+		}
+		defer mod.handle.Close()
+	}
+
+	for seq := uint16(0); seq < 5 && mod.Running(); seq++ {
+		if err, pkt := packets.NewDot11ProbeRequest(staMac, seq, ssid, network.GetInterfaceChannel(mod.iface.Name())); err != nil {
+			mod.Error("could not create probe packet: %s", err)
+			continue
+		} else {
+			mod.injectPacket(pkt)
+		}
+	}
+
+	mod.Debug("sent probe frames")
+
+	return nil
+}
+
 func (mod *WiFiModule) discoverProbes(radiotap *layers.RadioTap, dot11 *layers.Dot11, packet gopacket.Packet) {
 	if dot11.Type != layers.Dot11TypeMgmtProbeReq {
 		return
@@ -97,6 +122,11 @@ func (mod *WiFiModule) discoverProbes(radiotap *layers.RadioTap, dot11 *layers.D
 
 	req, ok := reqLayer.(*layers.Dot11MgmtProbeReq)
 	if !ok {
+		return
+	}
+
+	// skip stuff we're sending
+	if bytes.Equal(mod.probeMac, dot11.Address2) {
 		return
 	}
 
@@ -148,5 +178,46 @@ func (mod *WiFiModule) discoverClients(radiotap *layers.RadioTap, dot11 *layers.
 				})
 			}
 		}
+	})
+}
+
+func (mod *WiFiModule) discoverDeauths(radiotap *layers.RadioTap, dot11 *layers.Dot11, packet gopacket.Packet) {
+	if dot11.Type != layers.Dot11TypeMgmtDeauthentication {
+		return
+	}
+
+	// ignore deauth frames that we sent
+	if radiotap.ChannelFrequency == 0 {
+		return
+	}
+
+	deauthLayer := packet.Layer(layers.LayerTypeDot11MgmtDeauthentication)
+	if deauthLayer == nil {
+		return
+	}
+
+	deauth, ok := deauthLayer.(*layers.Dot11MgmtDeauthentication)
+	reason := "?"
+	if ok {
+		reason = deauth.Reason.String()
+	}
+
+	// trigger events only if the deauth is coming from an AP we know of
+	source := dot11.Address1.String()
+	ap, found := mod.Session.WiFi.Get(source)
+	if !found {
+		mod.Debug("skipping deauth frame from %s", source)
+		return
+	}
+
+	mod.Debug("deauth radio %#v", radiotap)
+
+	mod.Session.Events.Add("wifi.deauthentication", DeauthEvent{
+		RSSI:     radiotap.DBMAntennaSignal,
+		AP:       ap,
+		Address1: source,
+		Address2: dot11.Address2.String(),
+		Address3: dot11.Address3.String(),
+		Reason:   reason,
 	})
 }

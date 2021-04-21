@@ -95,8 +95,11 @@ func (p ModuleParam) validate(value string) (error, interface{}) {
 const ParamIfaceName = "<interface name>"
 const ParamIfaceAddress = "<interface address>"
 const ParamIfaceAddress6 = "<interface address6>"
+const ParamIfaceMac = "<interface mac>"
 const ParamSubnet = "<entire subnet>"
 const ParamRandomMAC = "<random mac>"
+
+var ParamIfaceNameParser = regexp.MustCompile("<([a-zA-Z0-9]{2,16})>")
 
 func (p ModuleParam) parse(s *Session, v string) string {
 	switch v {
@@ -106,12 +109,46 @@ func (p ModuleParam) parse(s *Session, v string) string {
 		v = s.Interface.IpAddress
 	case ParamIfaceAddress6:
 		v = s.Interface.Ip6Address
+	case ParamIfaceMac:
+		v = s.Interface.HwAddress
 	case ParamSubnet:
 		v = s.Interface.CIDR()
 	case ParamRandomMAC:
 		hw := make([]byte, 6)
 		rand.Read(hw)
 		v = net.HardwareAddr(hw).String()
+	default:
+		// check the <iface> case
+	 	if m := ParamIfaceNameParser.FindStringSubmatch(v); len(m) == 2 {
+	 		// does it match any interface?
+			name := m[1]
+			if iface, err := net.InterfaceByName(name); err == nil {
+				if addrs, err := iface.Addrs(); err == nil {
+					var ipv4, ipv6 *net.IP
+					// get first ipv4 and ipv6 addresses
+					for _, addr := range addrs {
+						if ipv4 == nil {
+							if ipv4Addr := addr.(*net.IPNet).IP.To4(); ipv4Addr != nil {
+								ipv4 = &ipv4Addr
+							}
+						} else if ipv6 == nil {
+							if ipv6Addr := addr.(*net.IPNet).IP.To16(); ipv6Addr != nil {
+								ipv6 = &ipv6Addr
+							}
+						} else {
+							break
+						}
+					}
+
+					// prioritize ipv4, fallback on ipv6 if assigned
+					if ipv4 != nil {
+						v = ipv4.String()
+					} else if ipv6 != nil {
+						v = ipv6.String()
+					}
+				}
+			}
+		}
 	}
 	return v
 

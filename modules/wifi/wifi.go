@@ -59,6 +59,7 @@ type WiFiModule struct {
 	apRunning           bool
 	showManuf           bool
 	apConfig            packets.Dot11ApConfig
+	probeMac            net.HardwareAddr
 	writes              *sync.WaitGroup
 	reads               *sync.WaitGroup
 	chanLock            *sync.Mutex
@@ -199,6 +200,20 @@ func NewWiFiModule(s *session.Session) *WiFiModule {
 	deauth.Complete("wifi.deauth", s.WiFiCompleterFull)
 
 	mod.AddHandler(deauth)
+
+	probe := session.NewModuleHandler("wifi.probe BSSID ESSID",
+		`wifi\.probe\s+([a-fA-F0-9:]{11,})\s+([^\s].+)`,
+		"Sends a fake client probe with the given station BSSID, searching for ESSID.",
+		func(args []string) (err error) {
+			if mod.probeMac, err = net.ParseMAC(args[0]); err != nil {
+				return err
+			}
+			return mod.startProbing(mod.probeMac, args[1])
+		})
+
+	probe.Complete("wifi.probe", s.WiFiCompleterFull)
+
+	mod.AddHandler(probe)
 
 	mod.AddParam(session.NewStringParameter("wifi.deauth.skip",
 		"",
@@ -661,6 +676,7 @@ func (mod *WiFiModule) Start() error {
 				mod.discoverAccessPoints(radiotap, dot11, packet)
 				mod.discoverClients(radiotap, dot11, packet)
 				mod.discoverHandshakes(radiotap, dot11, packet)
+				mod.discoverDeauths(radiotap, dot11, packet)
 				mod.updateInfo(dot11, packet)
 				mod.updateStats(dot11, packet)
 			}
