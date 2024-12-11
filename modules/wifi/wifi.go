@@ -2,17 +2,20 @@ package wifi
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"regexp"
+	"slices"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/bettercap/bettercap/modules/utils"
-	"github.com/bettercap/bettercap/network"
-	"github.com/bettercap/bettercap/packets"
-	"github.com/bettercap/bettercap/session"
+	"github.com/bettercap/bettercap/v2/modules/utils"
+	"github.com/bettercap/bettercap/v2/network"
+	"github.com/bettercap/bettercap/v2/packets"
+	"github.com/bettercap/bettercap/v2/session"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -21,13 +24,13 @@ import (
 	"github.com/evilsocket/islazy/fs"
 	"github.com/evilsocket/islazy/ops"
 	"github.com/evilsocket/islazy/str"
-	"github.com/evilsocket/islazy/tui"
 )
 
 type WiFiModule struct {
 	session.SessionModule
 
 	iface               *network.Endpoint
+	bruteforce          *bruteforceConfig
 	handle              *pcap.Handle
 	source              string
 	region              string
@@ -72,6 +75,7 @@ func NewWiFiModule(s *session.Session) *WiFiModule {
 	mod := &WiFiModule{
 		SessionModule:   session.NewSessionModule("wifi", s),
 		iface:           s.Interface,
+		bruteforce:      NewBruteForceConfig(),
 		minRSSI:         -200,
 		apTTL:           300,
 		staTTL:          300,
@@ -100,6 +104,7 @@ func NewWiFiModule(s *session.Session) *WiFiModule {
 	}
 
 	mod.InitState("channels")
+	mod.State.Store("channels", []int{})
 
 	mod.AddParam(session.NewStringParameter("wifi.interface",
 		"",
@@ -116,6 +121,44 @@ func NewWiFiModule(s *session.Session) *WiFiModule {
 		"Stop 802.11 wireless base stations discovery and channel hopping.",
 		func(args []string) error {
 			return mod.Stop()
+		}))
+
+	mod.AddParam(session.NewStringParameter("wifi.bruteforce.target",
+		mod.bruteforce.target,
+		"",
+		"One or more comma separated targets to bruteforce as ESSID or BSSID. Leave empty to bruteforce all visibile access points."))
+
+	mod.AddParam(session.NewStringParameter("wifi.bruteforce.wordlist",
+		mod.bruteforce.wordlist,
+		"",
+		"Wordlist file to use for bruteforcing."))
+
+	mod.AddParam(session.NewIntParameter("wifi.bruteforce.workers",
+		fmt.Sprintf("%d", mod.bruteforce.workers),
+		"How many parallel workers. WARNING: Some routers will ban multiple concurrent attempts."))
+
+	mod.AddParam(session.NewBoolParameter("wifi.bruteforce.wide",
+		fmt.Sprintf("%v", mod.bruteforce.wide),
+		"Attempt a password for each access point before moving to the next one."))
+
+	mod.AddParam(session.NewBoolParameter("wifi.bruteforce.stop_at_first",
+		fmt.Sprintf("%v", mod.bruteforce.stop_at_first),
+		"Stop bruteforcing after the first successful attempt."))
+
+	mod.AddParam(session.NewIntParameter("wifi.bruteforce.timeout",
+		fmt.Sprintf("%d", mod.bruteforce.timeout),
+		"Timeout in seconds for each association attempt."))
+
+	mod.AddHandler(session.NewModuleHandler("wifi.bruteforce on", "",
+		"Attempts to bruteforce WiFi authentication.",
+		func(args []string) error {
+			return mod.startBruteforce()
+		}))
+
+	mod.AddHandler(session.NewModuleHandler("wifi.bruteforce off", "",
+		"Stop previously started bruteforcing.",
+		func(args []string) error {
+			return mod.stopBruteforce()
 		}))
 
 	mod.AddHandler(session.NewModuleHandler("wifi.clear", "",
@@ -136,7 +179,7 @@ func NewWiFiModule(s *session.Session) *WiFiModule {
 				mod.stickChan = ap.Channel
 				return nil
 			}
-			return fmt.Errorf("Could not find station with BSSID %s", args[0])
+			return fmt.Errorf("could not find station with BSSID %s", args[0])
 		}))
 
 	mod.AddHandler(session.NewModuleHandler("wifi.recon clear", "",
@@ -419,7 +462,7 @@ func NewWiFiModule(s *session.Session) *WiFiModule {
 						return err
 					} else {
 						if f := network.Dot11Chan2Freq(ch); f == 0 {
-							return fmt.Errorf("%d is not a valid wifi channel.", ch)
+							return fmt.Errorf("%d is not a valid wifi channel", ch)
 						} else {
 							freqs = append(freqs, f)
 						}
@@ -486,9 +529,16 @@ func (mod *WiFiModule) setFrequencies(freqs []int) {
 	mod.frequencies = freqs
 	channels := []int{}
 	for _, freq := range freqs {
-		channels = append(channels, network.Dot11Freq2Chan(freq))
+		channel := network.Dot11Freq2Chan(freq)
+		if !slices.Contains(channels, channel) {
+			channels = append(channels, channel)
+		}
 	}
+	sort.Ints(channels)
+
 	mod.State.Store("channels", channels)
+
+	mod.Info("channels: %v", channels)
 }
 
 func (mod *WiFiModule) Configure() error {
@@ -550,7 +600,7 @@ func (mod *WiFiModule) Configure() error {
 
 		if mod.txPower > 0 {
 			if err := network.SetInterfaceTxPower(ifName, mod.txPower); err != nil {
-				mod.Warning("could not set interface %s txpower to %d, 'Set Tx Power' requests not supported", ifName, mod.txPower)
+				mod.Warning("could not set interface %s txpower to %d, 'Set Tx Power' requests not supported: %v", ifName, mod.txPower, err)
 			} else {
 				mod.Debug("interface %s txpower set to %d", ifName, mod.txPower)
 			}
@@ -579,9 +629,12 @@ func (mod *WiFiModule) Configure() error {
 				// second fatal error, just bail
 				return fmt.Errorf("error while activating handle: %s", err)
 			} else {
-				// first fatal error, try again without setting the interface in monitor mode
-				mod.Warning("error while activating handle: %s, %s", err, tui.Bold("interface might already be monitoring. retrying!"))
+				// first fatal error, forcing monitor mode
+				// https://github.com/bettercap/bettercap/issues/819
 				opts.Monitor = false
+				if err := network.ForceMonitorMode(ifName); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -662,10 +715,16 @@ func (mod *WiFiModule) updateStats(dot11 *layers.Dot11, packet gopacket.Packet) 
 	}
 }
 
+const wifiPrompt = "{by}{fb}{env.iface.name} {reset} {bold}» {reset}"
+
 func (mod *WiFiModule) Start() error {
-	if err := mod.Configure(); err != nil {
+	if mod.bruteforce.running.Load() {
+		return errors.New("stop wifi.bruteforce first")
+	} else if err := mod.Configure(); err != nil {
 		return err
 	}
+
+	mod.SetPrompt(wifiPrompt)
 
 	mod.SetRunning(true, func() {
 		// start channel hopper if needed
@@ -717,6 +776,8 @@ func (mod *WiFiModule) Start() error {
 }
 
 func (mod *WiFiModule) forcedStop() error {
+	mod.SetPrompt(session.DefaultPromptMonitor)
+
 	return mod.SetRunning(false, func() {
 		// signal the main for loop we want to exit
 		if !mod.pktSourceChanClosed {
@@ -728,6 +789,8 @@ func (mod *WiFiModule) forcedStop() error {
 }
 
 func (mod *WiFiModule) Stop() error {
+	mod.SetPrompt(session.DefaultPromptMonitor)
+
 	return mod.SetRunning(false, func() {
 		// wait any pending write operation
 		mod.writes.Wait()

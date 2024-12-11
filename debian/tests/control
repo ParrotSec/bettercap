@@ -1,3 +1,0 @@
-Test-Command: debian/tests/runtests.sh test_start_bettercap
-Restrictions: allow-stderr, needs-root
-Depends: @, expect, bettercap-caplets

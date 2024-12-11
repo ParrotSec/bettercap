@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"net"
 
-	"github.com/bettercap/bettercap/network"
+	"github.com/bettercap/bettercap/v2/network"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -13,7 +13,7 @@ import (
 var (
 	openFlags      = 1057
 	wpaFlags       = 1041
-	specManFlag    = 1<<8
+	specManFlag    = 1 << 8
 	durationID     = uint16(0x013a)
 	capabilityInfo = uint16(0x0411)
 	listenInterval = uint16(3)
@@ -253,7 +253,13 @@ func Dot11ParseEncryption(packet gopacket.Packet, dot11 *layers.Dot11) (bool, st
 							cipher = rsn.Pairwise.Suites[i].Type.String()
 						}
 						for i = 0; i < rsn.AuthKey.Count; i++ {
-							auth = rsn.AuthKey.Suites[i].Type.String()
+							// https://balramdot11b.com/2020/11/08/wpa3-deep-dive/
+							if rsn.AuthKey.Suites[i].Type == 8 {
+								auth = "SAE"
+								enc = "WPA3"
+							} else {
+								auth = rsn.AuthKey.Suites[i].Type.String()
+							}
 						}
 					}
 				} else if enc == "" && info.ID == layers.Dot11InformationElementIDVendor && info.Length >= 8 && bytes.Equal(info.OUI, wpaSignatureBytes) && bytes.HasPrefix(info.Info, []byte{1, 0}) {

@@ -1,10 +1,12 @@
 package session
 
 import (
-	"github.com/bettercap/bettercap/network"
-	"github.com/bettercap/bettercap/routing"
-	"github.com/evilsocket/islazy/log"
 	"time"
+
+	"github.com/bettercap/bettercap/v2/network"
+	"github.com/bettercap/bettercap/v2/routing"
+	"github.com/evilsocket/islazy/log"
+	"github.com/evilsocket/islazy/ops"
 )
 
 type gateway struct {
@@ -50,7 +52,10 @@ func (s *Session) routeMon() {
 		}
 
 		if err != nil {
-			s.Events.Log(log.ERROR, "error getting ipv4 gateway: %v", err)
+			s.Events.Log(
+				ops.Ternary(err == network.ErrNoGateway, log.DEBUG, log.ERROR).(log.Verbosity),
+				"error getting ipv4 gateway: %v",
+				err)
 		} else {
 			if gw4now.IpAddress != gw4.IpAddress || gw4now.HwAddress != gw4.HwAddress {
 				s.Events.Add("gateway.change", GatewayChange{

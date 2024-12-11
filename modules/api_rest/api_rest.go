@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bettercap/bettercap/session"
-	"github.com/bettercap/bettercap/tls"
+	"github.com/bettercap/bettercap/v2/session"
+	"github.com/bettercap/bettercap/v2/tls"
 
 	"github.com/bettercap/recording"
 
@@ -230,6 +230,7 @@ func (mod *RestAPI) Configure() error {
 		}
 	}
 
+	mod.server = &http.Server{}
 	mod.server.Addr = fmt.Sprintf("%s:%d", ip, port)
 
 	router := mux.NewRouter()

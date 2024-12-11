@@ -1,9 +1,10 @@
+//go:build !android
 // +build !android
 
 package network
 
 import (
-	"github.com/bettercap/bettercap/routing"
+	"github.com/bettercap/bettercap/v2/routing"
 )
 
 func FindGateway(iface *Endpoint) (*Endpoint, error) {
@@ -15,7 +16,7 @@ func FindGateway(iface *Endpoint) (*Endpoint, error) {
 	if gateway == iface.IpAddress {
 		Debug("gateway is the interface")
 		return iface, nil
-	} else {
+	} else if gateway != "" {
 		// we have the address, now we need its mac
 		mac, err := ArpLookup(iface.Name(), gateway, false)
 		if err != nil {

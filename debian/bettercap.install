@@ -1,2 +1,0 @@
-bettercap.service lib/systemd/system
-vendor/bin usr/

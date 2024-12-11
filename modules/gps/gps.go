@@ -3,12 +3,13 @@ package gps
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"time"
 
-	"github.com/bettercap/bettercap/session"
+	"github.com/bettercap/bettercap/v2/session"
 
 	"github.com/adrianmo/go-nmea"
-	"github.com/koppacetic/go-gpsd"
+	"github.com/stratoberry/go-gpsd"
 	"github.com/tarm/serial"
 
 	"github.com/evilsocket/islazy/str"
@@ -63,6 +64,24 @@ func NewGPS(s *session.Session) *GPS {
 		"Show the last coordinates returned by the GPS hardware.",
 		func(args []string) error {
 			return mod.Show()
+		}))
+
+	mod.AddHandler(session.NewModuleHandler("gps.set LAT LON", `(?i)^gps\.set\s+([0-9\.]+)\s+([0-9\.]+)$`,
+		"Manually set GPS location.",
+		func(args []string) error {
+
+			if lat, err := strconv.ParseFloat(args[0], 64); err != nil {
+				return err
+			} else if lon, err := strconv.ParseFloat(args[1], 64); err != nil {
+				return err
+			} else {
+				mod.Session.GPS.Updated = time.Now()
+				mod.Session.GPS.Latitude = lat
+				mod.Session.GPS.Longitude = lon
+				mod.Session.Events.Add("gps.new", mod.Session.GPS)
+			}
+
+			return nil
 		}))
 
 	return mod
@@ -159,7 +178,7 @@ func (mod *GPS) readFromSerial() {
 }
 
 func (mod *GPS) runFromGPSD() {
-	mod.gpsd.Subscribe("TPV", func(r interface{}) {
+	mod.gpsd.AddFilter("TPV", func(r interface{}) {
 		report := r.(*gpsd.TPVReport)
 		mod.Session.GPS.Updated = report.Time
 		mod.Session.GPS.Latitude = report.Lat
@@ -170,14 +189,15 @@ func (mod *GPS) runFromGPSD() {
 		mod.Session.Events.Add("gps.new", mod.Session.GPS)
 	})
 
-	mod.gpsd.Subscribe("SKY", func(r interface{}) {
+	mod.gpsd.AddFilter("SKY", func(r interface{}) {
 		report := r.(*gpsd.SKYReport)
 		mod.Session.GPS.NumSatellites = int64(len(report.Satellites))
 		mod.Session.GPS.HDOP = report.Hdop
 		//mod.Session.GPS.Separation = 0
 	})
 
-	mod.gpsd.Run()
+	done := mod.gpsd.Watch()
+	<-done
 }
 
 func (mod *GPS) Start() error {
@@ -205,10 +225,12 @@ func (mod *GPS) Stop() error {
 		if mod.serial != nil {
 			// let the read fail and exit
 			mod.serial.Close()
-		} else {
-			if err := mod.gpsd.Close(); err != nil {
-				mod.Error("failed closing the connection to GPSD: %s", err)
-			}
-		}
+		} /*
+			FIXME: no Close or Stop method in github.com/stratoberry/go-gpsd
+			else {
+				if err := mod.gpsd.Close(); err != nil {
+					mod.Error("failed closing the connection to GPSD: %s", err)
+				}
+			} */
 	})
 }
