@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bettercap/bettercap/core"
+	"github.com/bettercap/bettercap/v2/core"
 
 	"github.com/evilsocket/islazy/data"
 	"github.com/evilsocket/islazy/str"
@@ -29,11 +29,19 @@ const (
 
 var (
 	BroadcastHw        = []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-	IPv4Validator      = regexp.MustCompile(`^[0-9\.]+/?\d*$`)
-	IPv4RangeValidator = regexp.MustCompile(`^[0-9\.\-]+/?\d*$`)
-	MACValidator       = regexp.MustCompile(`(?i)^[a-f0-9]{1,2}:[a-f0-9]{1,2}:[a-f0-9]{1,2}:[a-f0-9]{1,2}:[a-f0-9]{1,2}:[a-f0-9]{1,2}$`)
+	IPv4BlockValidator = regexp.MustCompile(`^` +
+		`(?:(?:25[0-5]|2[0-4][0-9]|[1][0-9]{2}|[1-9]?[0-9])\.){3}` +
+		`(?:25[0-5]|2[0-4][0-9]|[1][0-9]{2}|[1-9]?[0-9])` +
+		`/(?:3[0-2]|2[0-9]|[1]?[0-9])` + `$`)
+	IPv4RangeValidator = regexp.MustCompile(`^` +
+		`(?:(?:(?:25[0-5]|2[0-4][0-9]|[1][0-9]{2}|[1-9]?[0-9])-)?(?:25[0-5]|2[0-4][0-9]|[1][0-9]{2}|[1-9]?[0-9])\.){3}` +
+		`(?:(?:25[0-5]|2[0-4][0-9]|[1][0-9]{2}|[1-9]?[0-9])-)?(?:25[0-5]|2[0-4][0-9]|[1][0-9]{2}|[1-9]?[0-9])` + `$`)
+	IPv4Validator = regexp.MustCompile(`^` +
+		`(?:(?:25[0-5]|2[0-4][0-9]|[1][0-9]{2}|[1-9]?[0-9])\.){3}` +
+		`(?:25[0-5]|2[0-4][0-9]|[1][0-9]{2}|[1-9]?[0-9])` + `$`)
+	MACValidator = regexp.MustCompile(`(?i)^(?:[a-f0-9]{2}:){5}[a-f0-9]{2}$`)
 	// lulz this sounds like a hamburger
-	macParser   = regexp.MustCompile(`(?i)([a-f0-9]{1,2}:[a-f0-9]{1,2}:[a-f0-9]{1,2}:[a-f0-9]{1,2}:[a-f0-9]{1,2}:[a-f0-9]{1,2})`)
+	macParser   = regexp.MustCompile(`(?i)((?:[a-f0-9]{2}:){5}[a-f0-9]{2})`)
 	aliasParser = regexp.MustCompile(`(?i)([a-z_][a-z_0-9]+)`)
 )
 
@@ -188,17 +196,16 @@ func buildEndpointFromInterface(iface net.Interface) (*Endpoint, error) {
 
 	for _, a := range addrs {
 		address := a.String()
-		if IPv4Validator.MatchString(address) {
-			if !strings.ContainsRune(address, '/') {
-				// plain ip
-				e.SetIP(address)
-			} else {
-				// ip/bits
-				e.SetNetwork(address)
-			}
-		} else {
-			// ipv6/xxx
+		switch true {
+		case IPv4Validator.MatchString(address):
+			e.SetIP(address)
+			break
+		case IPv4BlockValidator.MatchString(address):
+			e.SetNetwork(address)
+			break
+		default:
 			e.SetIPv6(address)
+			break
 		}
 	}
 
@@ -247,8 +254,13 @@ func FindInterface(name string) (*Endpoint, error) {
 
 	// user did not provide an interface name,
 	// return the first one with a valid ipv4
-	// address
+	// address that does not loop back
 	for _, iface := range ifaces {
+		// if name has not been provided, avoid default to a tun interface
+		if strings.Contains(iface.Name, "tun") {
+			continue
+		}
+
 		addrs, err := iface.Addrs()
 		if err != nil {
 			fmt.Printf("wtf of the day: %s", err)
@@ -257,7 +269,7 @@ func FindInterface(name string) (*Endpoint, error) {
 
 		for _, address := range addrs {
 			ip := address.String()
-			if !strings.Contains(ip, "127.0.0.1") && IPv4Validator.MatchString(ip) {
+			if !strings.HasPrefix(ip, "127.0.0.1") && IPv4BlockValidator.MatchString(ip) {
 				return buildEndpointFromInterface(iface)
 			}
 		}

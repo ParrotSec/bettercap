@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bettercap/bettercap/modules/net_recon"
-	"github.com/bettercap/bettercap/network"
-	"github.com/bettercap/bettercap/session"
+	"github.com/bettercap/bettercap/v2/modules/net_recon"
+	"github.com/bettercap/bettercap/v2/network"
+	"github.com/bettercap/bettercap/v2/session"
 
 	"github.com/dustin/go-humanize"
 
@@ -181,7 +181,7 @@ func (mod *WiFiModule) doSelection() (err error, stations []*network.Station) {
 		if ap, found := mod.Session.WiFi.Get(mod.ap.HwAddress); found {
 			stations = ap.Clients()
 		} else {
-			err = fmt.Errorf("Could not find station %s", mod.ap.HwAddress)
+			err = fmt.Errorf("could not find station %s", mod.ap.HwAddress)
 			return
 		}
 	} else {
@@ -315,8 +315,11 @@ func (mod *WiFiModule) showStatusBar() {
 }
 
 func (mod *WiFiModule) Show() (err error) {
-	if mod.Running() == false {
-		return session.ErrAlreadyStopped(mod.Name())
+	// module has not been started yet
+	if mod.iface == nil {
+		if err := mod.Configure(); err != nil {
+			return err
+		}
 	}
 
 	var stations []*network.Station

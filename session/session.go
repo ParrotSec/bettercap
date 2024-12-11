@@ -14,11 +14,12 @@ import (
 
 	"github.com/bettercap/readline"
 
-	"github.com/bettercap/bettercap/caplets"
-	"github.com/bettercap/bettercap/core"
-	"github.com/bettercap/bettercap/firewall"
-	"github.com/bettercap/bettercap/network"
-	"github.com/bettercap/bettercap/packets"
+	"github.com/bettercap/bettercap/v2/caplets"
+	"github.com/bettercap/bettercap/v2/core"
+	"github.com/bettercap/bettercap/v2/firewall"
+	my_log "github.com/bettercap/bettercap/v2/log"
+	"github.com/bettercap/bettercap/v2/network"
+	"github.com/bettercap/bettercap/v2/packets"
 
 	"github.com/evilsocket/islazy/data"
 	"github.com/evilsocket/islazy/fs"
@@ -30,7 +31,8 @@ import (
 )
 
 const (
-	HistoryFile = "~/bettercap.history"
+	DefaultHistoryFile = "~/bettercap.history"
+	HistoryEnvVar      = "BETTERCAP_HISTORY"
 )
 
 var (
@@ -76,6 +78,7 @@ type Session struct {
 	WiFi      *network.WiFi
 	BLE       *network.BLE
 	HID       *network.HID
+	CAN       *network.CAN
 	Queue     *packets.Queue
 	StartedAt time.Time
 	Active    bool
@@ -120,9 +123,12 @@ func New() (*Session, error) {
 	}
 
 	if *s.Options.CpuProfile != "" {
-		if f, err := os.Create(*s.Options.CpuProfile); err != nil {
+		f, err := os.Create(*s.Options.CpuProfile)
+		if err != nil {
 			return nil, err
-		} else if err := pprof.StartCPUProfile(f); err != nil {
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
 			return nil, err
 		}
 	}
@@ -145,6 +151,7 @@ func New() (*Session, error) {
 
 	if I == nil {
 		I = s
+		my_log.Logger = s.Events.Log
 	}
 
 	return s, nil
@@ -269,6 +276,12 @@ func (s *Session) Start() error {
 
 	s.Firewall = firewall.Make(s.Interface)
 
+	s.CAN = network.NewCAN(s.Aliases, func(dev *network.CANDevice) {
+		s.Events.Add("can.device.new", dev)
+	}, func(dev *network.CANDevice) {
+		s.Events.Add("can.device.lost", dev)
+	})
+
 	s.HID = network.NewHID(s.Aliases, func(dev *network.HIDDevice) {
 		s.Events.Add("hid.device.new", dev)
 	}, func(dev *network.HIDDevice) {
@@ -306,14 +319,15 @@ func (s *Session) Start() error {
 
 	s.startNetMon()
 
-	if *s.Options.Debug {
-		s.Events.Add("session.started", nil)
-	}
+	s.Events.Add("session.started", nil)
 
 	// register js functions here to avoid cyclic dependency between
 	// js and session
 	plugin.Defines["env"] = jsEnvFunc
 	plugin.Defines["run"] = jsRunFunc
+	plugin.Defines["fileExists"] = jsFileExistsFunc
+	plugin.Defines["loadJSON"] = jsLoadJSONFunc
+	plugin.Defines["saveJSON"] = jsSaveJSONFunc
 	plugin.Defines["onEvent"] = jsOnEventFunc
 	plugin.Defines["session"] = s
 
@@ -446,10 +460,18 @@ func (s *Session) Run(line string) error {
 	}
 
 	// is it a module command?
-	for _, m := range s.Modules {
-		for _, h := range m.Handlers() {
-			if parsed, args := h.Parse(line); parsed {
-				return h.Exec(args)
+	for _, mod := range s.Modules {
+		for _, modHandler := range mod.Handlers() {
+			if parsed, args := modHandler.Parse(line); parsed {
+				if err := modHandler.Exec(args); err != nil {
+					return err
+				} else if prompt := mod.Prompt(); prompt != "" {
+					// if the module handler has been executed successfully and
+					// the module overrides the prompt, set it
+					s.Env.Set(PromptVariable, prompt)
+					s.Refresh()
+				}
+				return nil
 			}
 		}
 	}
@@ -466,5 +488,5 @@ func (s *Session) Run(line string) error {
 		return nil
 	}
 
-	return fmt.Errorf("unknown or invalid syntax \"%s%s%s\", type %shelp%s for the help menu.", tui.BOLD, line, tui.RESET, tui.BOLD, tui.RESET)
+	return fmt.Errorf("unknown or invalid syntax \"%s%s%s\", type %shelp%s for the help menu", tui.BOLD, line, tui.RESET, tui.BOLD, tui.RESET)
 }

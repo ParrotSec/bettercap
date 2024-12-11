@@ -1,4 +1,5 @@
-// +build !windows
+//go:build !windows && !freebsd && !openbsd && !netbsd
+// +build !windows,!freebsd,!openbsd,!netbsd
 
 package ble
 
@@ -6,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/bettercap/bettercap/network"
+	"github.com/bettercap/bettercap/v2/network"
 
 	"github.com/evilsocket/islazy/ops"
 	"github.com/evilsocket/islazy/tui"

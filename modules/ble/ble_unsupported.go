@@ -1,9 +1,10 @@
-// +build windows
+//go:build windows || freebsd || netbsd || openbsd
+// +build windows freebsd netbsd openbsd
 
 package ble
 
 import (
-	"github.com/bettercap/bettercap/session"
+	"github.com/bettercap/bettercap/v2/session"
 )
 
 type BLERecon struct {

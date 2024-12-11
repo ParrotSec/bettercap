@@ -4,17 +4,19 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
-	"github.com/bettercap/bettercap/core"
-	"github.com/bettercap/bettercap/network"
+	"github.com/bettercap/bettercap/v2/core"
+	"github.com/bettercap/bettercap/v2/network"
 
-	"github.com/evilsocket/islazy/str"
 	"github.com/evilsocket/islazy/fs"
+	"github.com/evilsocket/islazy/str"
 )
 
 type LinuxFirewall struct {
 	iface        *network.Endpoint
 	forwarding   bool
+	restore      bool
 	redirections map[string]*Redirection
 }
 
@@ -27,6 +29,7 @@ func Make(iface *network.Endpoint) FirewallManager {
 	firewall := &LinuxFirewall{
 		iface:        iface,
 		forwarding:   false,
+		restore:      false,
 		redirections: make(map[string]*Redirection),
 	}
 
@@ -65,16 +68,28 @@ func (f LinuxFirewall) IsForwardingEnabled() bool {
 func (f LinuxFirewall) EnableForwarding(enabled bool) error {
 	if err := f.enableFeature(IPV4ForwardingFile, enabled); err != nil {
 		return err
-	} else if fs.Exists(IPV6ForwardingFile) {
+	}
+
+	if fs.Exists(IPV6ForwardingFile) {
 		return f.enableFeature(IPV6ForwardingFile, enabled)
 	}
+
+	f.restore = true
 	return nil
 }
 
 func (f *LinuxFirewall) getCommandLine(r *Redirection, enabled bool) (cmdLine []string) {
 	action := "-A"
+	destination := ""
+
 	if !enabled {
 		action = "-D"
+	}
+
+	if strings.Count(r.DstAddress, ":") < 2 {
+		destination = r.DstAddress
+	} else {
+		destination = fmt.Sprintf("[%s]", r.DstAddress)
 	}
 
 	if r.SrcAddress == "" {
@@ -85,7 +100,7 @@ func (f *LinuxFirewall) getCommandLine(r *Redirection, enabled bool) (cmdLine []
 			"-p", r.Protocol,
 			"--dport", fmt.Sprintf("%d", r.SrcPort),
 			"-j", "DNAT",
-			"--to", fmt.Sprintf("%s:%d", r.DstAddress, r.DstPort),
+			"--to", fmt.Sprintf("%s:%d", destination, r.DstPort),
 		}
 	} else {
 		cmdLine = []string{
@@ -96,7 +111,7 @@ func (f *LinuxFirewall) getCommandLine(r *Redirection, enabled bool) (cmdLine []
 			"-d", r.SrcAddress,
 			"--dport", fmt.Sprintf("%d", r.SrcPort),
 			"-j", "DNAT",
-			"--to", fmt.Sprintf("%s:%d", r.DstAddress, r.DstPort),
+			"--to", fmt.Sprintf("%s:%d", destination, r.DstPort),
 		}
 	}
 
@@ -107,6 +122,13 @@ func (f *LinuxFirewall) EnableRedirection(r *Redirection, enabled bool) error {
 	cmdLine := f.getCommandLine(r, enabled)
 	rkey := r.String()
 	_, found := f.redirections[rkey]
+	cmd := ""
+
+	if strings.Count(r.DstAddress, ":") < 2 {
+		cmd = "iptables"
+	} else {
+		cmd = "ip6tables"
+	}
 
 	if enabled {
 		if found {
@@ -116,9 +138,9 @@ func (f *LinuxFirewall) EnableRedirection(r *Redirection, enabled bool) error {
 		f.redirections[rkey] = r
 
 		// accept all
-		if _, err := core.Exec("iptables", []string{"-P", "FORWARD", "ACCEPT"}); err != nil {
+		if _, err := core.Exec(cmd, []string{"-P", "FORWARD", "ACCEPT"}); err != nil {
 			return err
-		} else if _, err := core.Exec("iptables", cmdLine); err != nil {
+		} else if _, err := core.Exec(cmd, cmdLine); err != nil {
 			return err
 		}
 	} else {
@@ -128,7 +150,7 @@ func (f *LinuxFirewall) EnableRedirection(r *Redirection, enabled bool) error {
 
 		delete(f.redirections, r.String())
 
-		if _, err := core.Exec("iptables", cmdLine); err != nil {
+		if _, err := core.Exec(cmd, cmdLine); err != nil {
 			return err
 		}
 	}
@@ -137,6 +159,9 @@ func (f *LinuxFirewall) EnableRedirection(r *Redirection, enabled bool) error {
 }
 
 func (f LinuxFirewall) Restore() {
+	if f.restore == false {
+		return
+	}
 	for _, r := range f.redirections {
 		if err := f.EnableRedirection(r, false); err != nil {
 			fmt.Printf("%s", err)
