@@ -1,5 +1,5 @@
 adapt-service-file.patch
-dont-update-install-ui.patch
+# dont-update-install-ui.patch
 add-info-about-update.patch
 disable-service-autostart.patch
-disable-install-update-caplets.patch
+# disable-install-update-caplets.patch
