@@ -9,9 +9,9 @@ import (
 
 	"github.com/bettercap/bettercap/v2/network"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
+	"github.com/gopacket/gopacket/pcap"
 )
 
 type Activity struct {
@@ -210,16 +210,16 @@ func (q *Queue) worker() {
 			eth := leth.(*layers.Ethernet)
 
 			// something coming from someone on the LAN
-			isFromMe := q.iface.IP.Equal(srcIP) || q.iface.IPv6.Equal(srcIP)
-			isFromLAN := q.iface.Net.Contains(srcIP)
+			isFromMe := q.iface.IP.Equal(srcIP) || (q.iface.IPv6 != nil && q.iface.IPv6.Equal(srcIP))
+			isFromLAN := q.iface.Net.Contains(srcIP) || (q.iface.Net6 != nil && q.iface.Net6.Contains(srcIP))
 			if !isFromMe && isFromLAN {
 				meta := q.getPacketMeta(pkt)
 				q.trackActivity(eth, srcIP, meta, pktSize, true)
 			}
 
 			// something going to someone on the LAN
-			isToMe := q.iface.IP.Equal(dstIP) || q.iface.IPv6.Equal(dstIP)
-			isToLAN := q.iface.Net.Contains(dstIP)
+			isToMe := q.iface.IP.Equal(dstIP) || (q.iface.IPv6 != nil && q.iface.IPv6.Equal(dstIP))
+			isToLAN := q.iface.Net.Contains(dstIP) || (q.iface.Net6 != nil && q.iface.Net6.Contains(dstIP))
 			if !isToMe && isToLAN {
 				q.trackActivity(eth, dstIP, nil, pktSize, false)
 			}

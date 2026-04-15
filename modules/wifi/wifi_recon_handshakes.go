@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"os"
 	"path"
 
 	"github.com/bettercap/bettercap/v2/network"
 
 	"github.com/bettercap/bettercap/v2/packets"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
 )
 
 func allZeros(s []byte) bool {
@@ -27,6 +28,11 @@ func (mod *WiFiModule) getHandshakeFileFor(ap *network.AccessPoint) string {
 	shakesFileName := mod.shakesFile
 	if !mod.shakesAggregate {
 		parentDir := path.Dir(shakesFileName)
+		// check for existing directory at "shakesFileName" for backwards compatibility
+		fileInfo, err := os.Stat(shakesFileName)
+		if (err == nil) && (fileInfo.IsDir()) {
+			parentDir = shakesFileName
+		}
 		shakesFileName = path.Join(parentDir, fmt.Sprintf("%s.pcap", ap.PathFriendlyName()))
 	}
 	return shakesFileName

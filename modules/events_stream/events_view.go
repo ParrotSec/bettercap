@@ -65,7 +65,7 @@ func (mod *EventsStream) viewEndpointEvent(output io.Writer, e session.Event) {
 }
 
 func (mod *EventsStream) viewModuleEvent(output io.Writer, e session.Event) {
-	if *mod.Session.Options.Debug {
+	if mod.Session.Options.Debug {
 		fmt.Fprintf(output, "[%s] [%s] %s\n",
 			e.Time.Format(mod.timeFormat),
 			tui.Green(e.Tag),
@@ -134,8 +134,10 @@ func (mod *EventsStream) Render(output io.Writer, e session.Event) {
 		mod.viewUpdateEvent(output, e)
 	} else if e.Tag == "gateway.change" {
 		mod.viewGatewayEvent(output, e)
-	} else if e.Tag != "tick" && e.Tag != "session.started" && e.Tag != "session.stopped" {
-		fmt.Fprintf(output, "[%s] [%s] %v\n", e.Time.Format(mod.timeFormat), tui.Green(e.Tag), e)
+	} else if strings.HasPrefix(e.Tag, "zeroconf.") {
+		mod.viewZeroConfEvent(output, e)
+	} else if !strings.HasPrefix(e.Tag, "tick") && e.Tag != "session.started" && e.Tag != "session.stopped" {
+		fmt.Fprintf(output, "[%s] [%s] %v\n", e.Time.Format(mod.timeFormat), tui.Green(e.Tag), e.Data)
 	}
 }
 
