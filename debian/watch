@@ -3,6 +3,3 @@ Version: 5
 Template: Github
 Owner: bettercap
 Project: bettercap
-
-#opts="filenamemangle=s/.*\/v?(.*)$/bettercap-$1/" \
-#https://github.com/bettercap/bettercap/releases .*/v?(\d.*)\.tar\.gz
