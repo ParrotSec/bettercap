@@ -1,3 +1,19 @@
+bettercap (2.41.5-1parrot1) echo-updates; urgency=medium
+
+  * d/watch: Update to version 5
+  * New upstream version 2.41.5
+  * Add patches
+  * d/vendor: Vendor missing Go packages
+  * d/watch: Update to version 5
+  * d/b.i: Only install service file from .install
+  * Update lintian overrides
+  * d/copyright: Update copyright
+  * d/control: Update dependencies and package name
+  * d/rules: Update build rules
+  * Prepare for Release
+
+ -- Steev Klimaszewski <steev@parrotsec.org>  Tue, 05 May 2026 14:16:53 -0500
+
 bettercap (2.40.0-0parrot1) lory-updates; urgency=medium
 
   * New upstream version 2.40.0
