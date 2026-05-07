@@ -1,18 +1,50 @@
 Source: bettercap
 Section: net
-Priority: optional
+Testsuite: autopkgtest-pkg-go
 Maintainer: Parrot Dev Team <team@parrotsec.org>
 Uploaders: Lorenzo "Palinuro" Faletra <palinuro@parrotsec.org>
 Build-Depends: debhelper-compat (= 12),
-	       ca-certificates,
-	       dh-golang,
-	       golang-go,
-	       libpcap-dev,
-	       libnetfilter-queue-dev,
-	       libusb-1.0-0-dev,
-	       procps,
-	       iproute2
-Standards-Version: 4.5.0
+               dh-golang,
+               golang-any,
+               golang-github-acarl005-stripansi-dev (>= 0.0~git20180116.5a71ef0),
+               golang-github-adrianmo-go-nmea-dev (>= 1.9.0),
+               golang-github-antchfx-jsonquery-dev (>= 1.3.5),
+               golang-github-bettercap-gatt-dev (>= 0.0~git20240808.ec4935e),
+               golang-github-bettercap-nrf24-dev (>= 0.0~git20190219.aa37e6d),
+               golang-github-bettercap-readline-dev (>= 1.4+git20210228.655e48b),
+               golang-github-cenkalti-backoff-dev,,
+               golang-github-dustin-go-humanize-dev (>= 1.0.1),
+               golang-github-elazarl-goproxy-dev (>= 1.1+git20240726.8b0c205),
+               golang-github-evilsocket-islazy-dev (>= 1.11.0),
+               golang-github-evilsocket-recording-dev (>= 0.0~git20190408.3ce1dcf),
+               golang-github-florianl-go-nfqueue-dev (>= 2.0.0),
+               golang-github-gobwas-glob-dev (>= 0.2.3+git20181002.e7a84e9),
+               golang-github-google-go-github-dev,
+               golang-github-google-gousb-dev (>= 1.1.3),
+               golang-github-gopacket-gopacket-dev (>= 1.1.19),
+               golang-github-gorilla-mux-dev (>= 1.8.1),
+               golang-github-gorilla-websocket-dev (>= 1.5.3),
+               golang-github-hashicorp-mdns-dev (>= 1.0.5),
+               golang-github-jpillora-go-tld-dev (>= 1.2.1),
+               golang-github-malfunkt-iprange-dev (>= 0.9.0),
+               golang-github-mdlayher-dhcp6-dev (>= 0.0~git20190311.2a67805),
+               golang-github-miekg-dns-dev (>= 1.1.61),
+               golang-github-mitchellh-go-homedir-dev (>= 1.1.0),
+               golang-github-robertkrimen-otto-dev,
+               golang-github-stratoberry-go-gpsd-dev (>= 1.3.0),
+               golang-github-tarm-serial-dev,
+               golang-github-thoj-go-ircevent-dev (>= 0.2+git20210723.73e4444),
+               golang-golang-x-net-dev,
+               golang-vhost-dev,
+               ca-certificates,
+               dh-golang,
+               golang-go,
+               libpcap-dev,
+               libnetfilter-queue-dev,
+               libusb-1.0-0-dev,
+               procps,
+               iproute2
+Standards-Version: 4.7.2
 Vcs-Git: https://nest.parrotsec.org/packages/tools/bettercap
 Vcs-Browser: https://nest.parrotsec.org/packages/tools/bettercap
 Homepage: https://www.bettercap.org
@@ -20,10 +52,16 @@ XS-Go-Import-Path: github.com/bettercap/bettercap
 
 Package: bettercap
 Architecture: any
-Depends: ${misc:Depends},
+Depends: ca-certificates,
+         iproute2,
+         iptables,
+         iw,
+         net-tools,
+         ${misc:Depends},
          ${shlibs:Depends}
-Recommends: bettercap-caplets, iptables, iw, iproute2
-Suggests: bettercap-ui
+Recommends: bettercap-caplets,
+Breaks: bettercap-ui (<< 2.41.5),
+Provides: bettercap-ui,
 Built-Using: ${misc:Built-Using}
 Description: Complete, modular, portable and easily extensible MITM framework
  This package contains a Swiss Army knife for 802.11, BLE and Ethernet networks

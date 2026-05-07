@@ -6,7 +6,7 @@ Files: *
 Copyright: 2015-2018 Simone 'evilsocket' Margaritelli <evilsocket@gmail.com>
 License: GPL-3
 
-Files: network/manuf
+Files: network/manuf/*
 Copyright: 1998 Gerald Combs
 License: GPL-2+
 
