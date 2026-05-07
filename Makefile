@@ -2,21 +2,17 @@ TARGET   ?= bettercap
 PACKAGES ?= core firewall log modules network packets session tls
 PREFIX   ?= /usr/local
 GO       ?= go
+GOFMT    ?= gofmt
 
 all: build
 
-build: resources ui
-	$(GOFLAGS) $(GO) build -o $(TARGET) .
+build: resources
+	$(GO) build $(GOFLAGS) -o $(TARGET) .
 
 build_with_race_detector: resources
-	$(GOFLAGS) $(GO) build -race -o $(TARGET) .
+	$(GO) build $(GOFLAGS) -race -o $(TARGET) .
 
 resources: network/manuf.go
-
-ui: ./modules/ui/ui/dist/ui/index.html
-
-./modules/ui/ui/dist/ui/index.html:
-	@cd modules/ui/ui && make build
 
 network/manuf.go:
 	@python3 ./network/make_manuf.py
@@ -29,16 +25,16 @@ docker:
 	@docker build -t bettercap:latest .
 
 test:
-	$(GOFLAGS) $(GO) test -covermode=atomic -coverprofile=cover.out ./...
+	$(GO) test -covermode=atomic -coverprofile=cover.out ./...
 
 html_coverage: test
-	$(GOFLAGS) $(GO) tool cover -html=cover.out -o cover.out.html
+	$(GO) tool cover -html=cover.out -o cover.out.html
 
 benchmark: server_deps
-	$(GOFLAGS) $(GO) test -v -run=doNotRunTests -bench=. -benchmem ./...
+	$(GO) test -v -run=doNotRunTests -bench=. -benchmem ./...
 
 fmt:
-	$(GO) fmt -s -w $(PACKAGES)
+	$(GOFMT) -s -w $(PACKAGES)
 
 clean:
 	$(RM) $(TARGET)

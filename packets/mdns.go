@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/evilsocket/islazy/str"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
 )
 
 const MDNSPort = 5353
@@ -84,7 +84,7 @@ func NewMDNSProbe(from net.IP, from_hw net.HardwareAddr) (error, []byte) {
 		OpCode: layers.DNSOpCodeQuery,
 		Questions: []layers.DNSQuestion{
 			{
-				Name:  []byte("_services._dns-sd._udp.local"),
+				Name:  []byte("_services._dns-sd._udp.local."),
 				Type:  layers.DNSTypePTR,
 				Class: layers.DNSClassIN,
 			},

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -15,6 +15,10 @@ import (
 	"github.com/evilsocket/islazy/fs"
 
 	"github.com/gorilla/mux"
+)
+
+var (
+	ansiEscapeRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 )
 
 type CommandRequest struct {
@@ -221,6 +225,10 @@ func (mod *RestAPI) runSessionCommand(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad Request", 400)
 	}
 
+	rescueStdout := os.Stdout
+	stdoutReader, stdoutWriter, _ := os.Pipe()
+	os.Stdout = stdoutWriter
+
 	for _, aCommand := range session.ParseCommands(cmd.Command) {
 		if err = mod.Session.Run(aCommand); err != nil {
 			http.Error(w, err.Error(), 400)
@@ -228,7 +236,12 @@ func (mod *RestAPI) runSessionCommand(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	mod.toJSON(w, APIResponse{Success: true})
+	stdoutWriter.Close()
+	out, _ := io.ReadAll(stdoutReader)
+	os.Stdout = rescueStdout
+
+	// remove ANSI escape sequences (bash color codes) from output
+	mod.toJSON(w, APIResponse{Success: true, Message: ansiEscapeRegex.ReplaceAllString(string(out), "")})
 }
 
 func (mod *RestAPI) getEvents(limit int) []session.Event {
@@ -380,7 +393,7 @@ func (mod *RestAPI) readFile(fileName string, w http.ResponseWriter, r *http.Req
 }
 
 func (mod *RestAPI) writeFile(fileName string, w http.ResponseWriter, r *http.Request) {
-	data, err := ioutil.ReadAll(r.Body)
+	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		msg := fmt.Sprintf("invalid file upload: %s", err)
 		mod.Warning(msg)
@@ -388,7 +401,7 @@ func (mod *RestAPI) writeFile(fileName string, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	err = ioutil.WriteFile(fileName, data, 0666)
+	err = os.WriteFile(fileName, data, 0666)
 	if err != nil {
 		msg := fmt.Sprintf("can't write to %s: %s", fileName, err)
 		mod.Warning(msg)
