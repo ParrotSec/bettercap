@@ -6,8 +6,8 @@ import (
 
 	"github.com/bettercap/bettercap/v2/session"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
 )
 
 type Sniffer struct {
@@ -58,6 +58,11 @@ func NewSniffer(s *session.Session) *Sniffer {
 		"",
 		"",
 		"If set, the sniffer will read from this pcap file instead of the current interface."))
+
+	mod.AddParam(session.NewStringParameter("net.sniff.interface",
+		"",
+		"",
+		"Interface to sniff on."))
 
 	mod.AddHandler(session.NewModuleHandler("net.sniff stats", "",
 		"Print sniffer session configuration and statistics.",
@@ -178,6 +183,11 @@ func (mod *Sniffer) Start() error {
 
 		src := gopacket.NewPacketSource(mod.Ctx.Handle, mod.Ctx.Handle.LinkType())
 		mod.pktSourceChan = src.Packets()
+
+		if mod.Ctx.OutputWriter != nil {
+			defer mod.Ctx.OutputWriter.Flush()
+		}
+
 		for packet := range mod.pktSourceChan {
 			if !mod.Running() {
 				mod.Debug("end pkt loop (pkt=%v filter='%s')", packet, mod.Ctx.Filter)

@@ -2,6 +2,7 @@ package http_proxy
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/bettercap/bettercap/v2/log"
 	"github.com/bettercap/bettercap/v2/session"
@@ -33,6 +34,31 @@ func LoadHttpProxyScript(path string, sess *session.Session) (err error, s *Http
 		return
 	}
 
+	// define addSessionEvent function
+	err = plug.Set("addSessionEvent", func(call otto.FunctionCall) otto.Value {
+		if len(call.ArgumentList) < 2 {
+			log.Error("Failed to execute 'addSessionEvent' in HTTP proxy: 2 arguments required, but only %d given.", len(call.ArgumentList))
+			return otto.FalseValue()
+		}
+		ottoTag := call.Argument(0)
+		if !ottoTag.IsString() {
+			log.Error("Failed to execute 'addSessionEvent' in HTTP proxy: first argument must be a string.")
+			return otto.FalseValue()
+		}
+		tag := strings.TrimSpace(ottoTag.String())
+		if tag == "" {
+			log.Error("Failed to execute 'addSessionEvent' in HTTP proxy: tag cannot be empty.")
+			return otto.FalseValue()
+		}
+		data := call.Argument(1)
+		sess.Events.Add(tag, data)
+		return otto.TrueValue()
+	})
+	if err != nil {
+		log.Error("Error while defining addSessionEvent function: %+v", err)
+		return
+	}
+
 	// run onLoad if defined
 	if plug.HasFunc("onLoad") {
 		if _, err = plug.Call("onLoad"); err != nil {
@@ -58,11 +84,9 @@ func (s *HttpProxyScript) OnRequest(original *http.Request) (jsreq *JSRequest, j
 		if _, err := s.Call("onRequest", jsreq, jsres); err != nil {
 			log.Error("%s", err)
 			return nil, nil
-		} else if jsreq.WasModified() {
-			jsreq.UpdateHash()
+		} else if jsreq.CheckIfModifiedAndUpdateHash() {
 			return jsreq, nil
-		} else if jsres.WasModified() {
-			jsres.UpdateHash()
+		} else if jsres.CheckIfModifiedAndUpdateHash() {
 			return nil, jsres
 		}
 	}
@@ -78,8 +102,7 @@ func (s *HttpProxyScript) OnResponse(res *http.Response) (jsreq *JSRequest, jsre
 		if _, err := s.Call("onResponse", jsreq, jsres); err != nil {
 			log.Error("%s", err)
 			return nil, nil
-		} else if jsres.WasModified() {
-			jsres.UpdateHash()
+		} else if jsres.CheckIfModifiedAndUpdateHash() {
 			return nil, jsres
 		}
 	}

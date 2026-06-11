@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/bettercap/bettercap/v2/log"
 	"github.com/evilsocket/islazy/data"
 )
 
@@ -61,7 +62,7 @@ func (lan *LAN) Get(mac string) (*Endpoint, bool) {
 
 	if mac == lan.iface.HwAddress {
 		return lan.iface, true
-	} else if mac == lan.gateway.HwAddress {
+	} else if lan.gateway != nil && mac == lan.gateway.HwAddress {
 		return lan.gateway, true
 	}
 
@@ -75,14 +76,14 @@ func (lan *LAN) GetByIp(ip string) *Endpoint {
 	lan.Lock()
 	defer lan.Unlock()
 
-	if ip == lan.iface.IpAddress {
+	if ip == lan.iface.IpAddress || ip == lan.iface.Ip6Address {
 		return lan.iface
-	} else if ip == lan.gateway.IpAddress {
+	} else if lan.gateway != nil && (ip == lan.gateway.IpAddress || ip == lan.gateway.Ip6Address) {
 		return lan.gateway
 	}
 
 	for _, e := range lan.hosts {
-		if e.IpAddress == ip {
+		if e.IpAddress == ip || e.Ip6Address == ip {
 			return e
 		}
 	}
@@ -101,12 +102,18 @@ func (lan *LAN) List() (list []*Endpoint) {
 	return
 }
 
+func (lan *LAN) NumHosts() int {
+	lan.Lock()
+	defer lan.Unlock()
+	return len(lan.hosts)
+}
+
 func (lan *LAN) Aliases() *data.UnsortedKV {
 	return lan.aliases
 }
 
 func (lan *LAN) WasMissed(mac string) bool {
-	if mac == lan.iface.HwAddress || mac == lan.gateway.HwAddress {
+	if mac == lan.iface.HwAddress || (lan.gateway != nil && mac == lan.gateway.HwAddress) {
 		return false
 	}
 
@@ -136,11 +143,11 @@ func (lan *LAN) Remove(ip, mac string) {
 
 func (lan *LAN) shouldIgnore(ip, mac string) bool {
 	// skip our own address
-	if ip == lan.iface.IpAddress || mac == lan.iface.HwAddress {
+	if ip == lan.iface.IpAddress || ip == lan.iface.Ip6Address || mac == lan.iface.HwAddress {
 		return true
 	}
 	// skip the gateway
-	if ip == lan.gateway.IpAddress || mac == lan.gateway.HwAddress {
+	if lan.gateway != nil && (ip == lan.gateway.IpAddress || ip == lan.gateway.Ip6Address || mac == lan.gateway.HwAddress) {
 		return true
 	}
 	// skip broadcast addresses
@@ -153,7 +160,7 @@ func (lan *LAN) shouldIgnore(ip, mac string) bool {
 	}
 	// skip everything which is not in our subnet (multicast noise)
 	addr := net.ParseIP(ip)
-	return addr.To4() != nil && !lan.iface.Net.Contains(addr)
+	return addr.To4() != nil && lan.iface.Net != nil && !lan.iface.Net.Contains(addr)
 }
 
 func (lan *LAN) Has(ip string) bool {
@@ -190,6 +197,15 @@ func (lan *LAN) AddIfNew(ip, mac string) *Endpoint {
 		if lan.ttl[mac] < LANDefaultttl {
 			lan.ttl[mac]++
 		}
+
+		if strings.ContainsRune(ip, ':') && t.Ip6Address == "" {
+			log.Info("ipv6 %s detected for %s (%s)", ip, t.IpAddress, mac)
+			t.SetIPv6(ip)
+		} else if strings.ContainsRune(ip, '.') && t.IpAddress == "" {
+			log.Info("ipv4 %s detected for %s (%s)", ip, t.Ip6Address, mac)
+			t.SetIP(ip)
+		}
+
 		return t
 	}
 
